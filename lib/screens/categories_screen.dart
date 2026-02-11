@@ -5,6 +5,9 @@ import 'food_category_screen.dart';
 import 'add_category_screen.dart';
 import 'edit_category_screen.dart';
 import 'savings_dart.dart';
+import '../services/auth_service.dart';
+import '../services/budget_service.dart';
+import '../services/transaction_service.dart';
 
 class CategoriesScreen extends StatefulWidget {
   const CategoriesScreen({super.key});
@@ -19,6 +22,10 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   static const kFormBg = Color(0xFFF3F2FF);
   static const kTextDark = Color(0xFF052224);
   static const kCategoryColor = Color(0xFF81C9CC);
+
+  List<TransactionEntry> _transactions = [];
+  bool _isLoading = true;
+  double _monthlyIncome = 0.0;
 
   final List<Map<String, dynamic>> categories = [
     {"name": "Food", "icon": Icons.restaurant},
@@ -180,6 +187,52 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
     );
   }
 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadTransactions();
+      _loadBudget();
+    });
+  }
+
+  Future<void> _loadTransactions() async {
+    final auth = AuthScope.of(context);
+    final email = auth.currentUser?.email;
+    if (email == null || email.isEmpty) {
+      setState(() {
+        _transactions = [];
+        _isLoading = false;
+      });
+      return;
+    }
+
+    final list = await TransactionService.instance.loadForUser(email);
+    list.sort((a, b) => b.dateTime.compareTo(a.dateTime));
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _transactions = list;
+      _isLoading = false;
+    });
+  }
+
+  Future<void> _loadBudget() async {
+    final auth = AuthScope.of(context);
+    final email = auth.currentUser?.email;
+    if (email == null || email.isEmpty) {
+      return;
+    }
+    final saved = await BudgetService.instance.loadForUser(email);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _monthlyIncome = saved?.monthlyIncome ?? 0.0;
+    });
+  }
+
   Widget _buildCategoryItem(Map<String, dynamic> category) {
     final isFood = category['name'] == 'Food';
     final isSavings = category['name'] == 'Savings';
@@ -305,17 +358,35 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   }
 
   Widget _buildTopStats() {
+    final totalExpense = _totalExpenses;
+    final totalBalance = _balance;
+    final usagePercent = _monthlyIncome > 0 ? (totalExpense / _monthlyIncome).clamp(0.0, 1.0) : 0.0;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 10),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _buildMiniStat("Total Balance", "\$7,783.00", Icons.outbox),
+          _buildMiniStat("Total Balance", _formatCurrency(totalBalance, signed: true), Icons.outbox),
           Container(width: 1, height: 40, color: Colors.white30),
-          _buildMiniStat("Total Expense", "-\$1,187.40", Icons.move_to_inbox, isExpense: true),
+          _buildMiniStat("Total Expense", _formatCurrency(totalExpense, signed: true), Icons.move_to_inbox, isExpense: true),
         ],
       ),
     );
+  }
+
+  double get _totalIncome => _transactions.where((entry) => entry.amount >= 0).fold(0.0, (sum, entry) => sum + entry.amount);
+
+  double get _totalExpenses => _transactions.where((entry) => entry.amount < 0).fold(0.0, (sum, entry) => sum + entry.amount.abs());
+
+  double get _balance => _transactions.fold(0.0, (sum, entry) => sum + entry.amount);
+
+  String _formatCurrency(double amount, {bool signed = false}) {
+    final value = amount.abs().toStringAsFixed(2);
+    if (signed) {
+      final sign = amount < 0 ? '-' : '';
+      return '$sign Rs $value';
+    }
+    return 'Rs $value';
   }
 
   Widget _buildMiniStat(String label, String amount, IconData icon, {bool isExpense = false}) {

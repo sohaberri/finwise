@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'custom_nav_bar.dart';
 import 'add_expenses_screen.dart';
+import 'edit_expense_screen.dart';
+import '../services/auth_service.dart';
+import '../services/transaction_service.dart';
+import '../services/budget_service.dart';
 
 class FoodCategoryScreen extends StatefulWidget {
   const FoodCategoryScreen({super.key});
@@ -20,38 +24,74 @@ class _FoodCategoryScreenState extends State<FoodCategoryScreen> {
   // 1. Controller for the search bar
   final TextEditingController _searchController = TextEditingController();
 
-  // 2. The master list of transactions
-  final List<Map<String, dynamic>> allTransactions = [
-    {"name": "Dinner", "time": "18:27 - April 30", "amount": "-\$26.00"},
-    {"name": "Delivery Pizza", "time": "15:00 - April 24", "amount": "-\$18.35"},
-    {"name": "Lunch", "time": "12:30 - April 15", "amount": "-\$15.40"},
-    {"name": "Brunch", "time": "9:30 - April 08", "amount": "-\$12.13"},
-  ];
-
-  // 3. The list that actually gets displayed
-  List<Map<String, dynamic>> filteredTransactions = [];
+  List<TransactionEntry> _allTransactions = [];
+  List<TransactionEntry> _filteredTransactions = [];
+  bool _isLoading = true;
+  double _monthlyIncome = 0.0;
 
   @override
   void initState() {
     super.initState();
-    // Initialize with all transactions
-    filteredTransactions = allTransactions;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadTransactions();
+      _loadBudget();
+    });
+  }
+
+  Future<void> _loadTransactions() async {
+    final auth = AuthScope.of(context);
+    final email = auth.currentUser?.email;
+    if (email == null || email.isEmpty) {
+      setState(() {
+        _allTransactions = [];
+        _filteredTransactions = [];
+        _isLoading = false;
+      });
+      return;
+    }
+
+    final list = await TransactionService.instance.loadForUser(email);
+    list.sort((a, b) => b.dateTime.compareTo(a.dateTime));
+    final foodOnly = list.where((entry) => entry.category == 'Food').toList();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _allTransactions = list;
+      _filteredTransactions = foodOnly;
+      _isLoading = false;
+    });
+  }
+
+  Future<void> _loadBudget() async {
+    final auth = AuthScope.of(context);
+    final email = auth.currentUser?.email;
+    if (email == null || email.isEmpty) {
+      return;
+    }
+    final saved = await BudgetService.instance.loadForUser(email);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _monthlyIncome = saved?.monthlyIncome ?? 0.0;
+    });
   }
 
   // 4. Filtering logic
   void _runFilter(String enteredKeyword) {
-    List<Map<String, dynamic>> results = [];
+    List<TransactionEntry> results = [];
     if (enteredKeyword.isEmpty) {
-      results = allTransactions;
+      results = _allTransactions.where((entry) => entry.category == 'Food').toList();
     } else {
-      results = allTransactions
-          .where((user) =>
-              user["name"].toLowerCase().contains(enteredKeyword.toLowerCase()))
+      results = _allTransactions
+          .where((entry) => entry.category == 'Food')
+          .where((entry) => entry.title.toLowerCase().contains(enteredKeyword.toLowerCase()))
           .toList();
     }
 
     setState(() {
-      filteredTransactions = results;
+      _filteredTransactions = results;
     });
   }
 
@@ -118,32 +158,37 @@ class _FoodCategoryScreenState extends State<FoodCategoryScreen> {
                               ),
                             ),
                             const SizedBox(height: 15),
-                            if (filteredTransactions.isNotEmpty)
+                            if (_isLoading)
+                              const SizedBox(height: 80)
+                            else if (_filteredTransactions.isNotEmpty)
                               ListView.builder(
                                 shrinkWrap: true,
                                 physics: const NeverScrollableScrollPhysics(),
-                                itemCount: filteredTransactions.length,
+                                itemCount: _filteredTransactions.length,
                                 itemBuilder: (context, index) {
                                   return _buildTransactionItem(
-                                    filteredTransactions[index],
+                                    _filteredTransactions[index],
                                   );
                                 },
                               )
                             else
                               Center(
                                 child: Text(
-                                  "No transactions found",
+                                  "No transactions to show",
                                   style: GoogleFonts.poppins(color: Colors.grey),
                                 ),
                               ),
                             const SizedBox(height: 20),
                             Center(
                               child: ElevatedButton(
-                                onPressed: () {
-                                  Navigator.push(
+                                onPressed: () async {
+                                  final added = await Navigator.push(
                                     context,
                                     MaterialPageRoute(builder: (context) => const AddExpensesScreen()),
                                   );
+                                  if (added == true) {
+                                    await _loadTransactions();
+                                  }
                                 },
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: const Color(0xFF5E5F92),
@@ -241,6 +286,9 @@ class _FoodCategoryScreenState extends State<FoodCategoryScreen> {
   }
 
   Widget _buildTopStats() {
+    final totalExpense = _totalExpenses;
+    final totalBalance = _balance;
+    final usagePercent = _monthlyIncome > 0 ? (totalExpense / _monthlyIncome).clamp(0.0, 1.0) : 0.0;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 10),
       child: Column(
@@ -248,11 +296,10 @@ class _FoodCategoryScreenState extends State<FoodCategoryScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _buildMiniStat("Total Balance", "\$7,783.00", Icons.outbox),
+              _buildMiniStat("Total Balance", _formatCurrency(totalBalance, signed: true), Icons.outbox),
               Container(width: 1, height: 40, color: Colors.white30),
-              _buildMiniStat("Total Expense", "-\$1.187.40",
-                  Icons.move_to_inbox,
-                  isExpense: true),
+              _buildMiniStat("Total Expense", _formatCurrency(totalExpense, signed: true),
+                  Icons.move_to_inbox, isExpense: true),
             ],
           ),
           const SizedBox(height: 20),
@@ -264,14 +311,14 @@ class _FoodCategoryScreenState extends State<FoodCategoryScreen> {
             child: Stack(
               children: [
                 FractionallySizedBox(
-                  widthFactor: 0.3,
+                  widthFactor: usagePercent,
                   child: Container(
                     decoration: BoxDecoration(
                         color: Colors.black,
                         borderRadius: BorderRadius.circular(15)),
                     alignment: Alignment.center,
-                    child: const Text("30%",
-                        style: TextStyle(
+                    child: Text("${(usagePercent * 100).round()}%",
+                        style: const TextStyle(
                             color: Colors.white,
                             fontSize: 10,
                             fontWeight: FontWeight.bold)),
@@ -280,7 +327,7 @@ class _FoodCategoryScreenState extends State<FoodCategoryScreen> {
                 Positioned(
                     right: 15,
                     top: 4,
-                    child: Text("\$20,000.00",
+                    child: Text(_formatCurrency(_monthlyIncome),
                         style: GoogleFonts.poppins(
                             color: kDeepBlue,
                             fontSize: 12,
@@ -295,7 +342,10 @@ class _FoodCategoryScreenState extends State<FoodCategoryScreen> {
               const Icon(Icons.check_box_outlined,
                   color: Colors.white, size: 18),
               const SizedBox(width: 8),
-              Text("30% Of Your Expenses, Looks Good.",
+              Text(
+                  _monthlyIncome > 0
+                      ? "${(usagePercent * 100).round()}% Of Your Income has been used!"
+                      : "Set a monthly income to track spending.",
                   style: GoogleFonts.poppins(color: Colors.white, fontSize: 13)),
             ],
           )
@@ -323,38 +373,190 @@ class _FoodCategoryScreenState extends State<FoodCategoryScreen> {
     );
   }
 
-  Widget _buildTransactionItem(Map<String, dynamic> item) {
+  double get _totalIncome => _allTransactions.where((entry) => entry.amount >= 0).fold(0.0, (sum, entry) => sum + entry.amount);
+
+  double get _totalExpenses => _allTransactions.where((entry) => entry.amount < 0).fold(0.0, (sum, entry) => sum + entry.amount.abs());
+
+  double get _balance => _allTransactions.fold(0.0, (sum, entry) => sum + entry.amount);
+
+  String _formatCurrency(double amount, {bool signed = false}) {
+    final value = amount.abs().toStringAsFixed(2);
+    if (signed) {
+      final sign = amount < 0 ? '-' : '';
+      return '$sign Rs $value';
+    }
+    return 'Rs $value';
+  }
+
+  Widget _buildTransactionItem(TransactionEntry entry) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 20),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-                color: kCategoryIconBg,
-                borderRadius: BorderRadius.circular(15)),
-            child: const Icon(Icons.restaurant, color: Colors.white),
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Dismissible(
+        key: Key('${entry.id}'),
+        confirmDismiss: (direction) async {
+          if (direction == DismissDirection.startToEnd) {
+            final confirmed = await _showDeleteDialog(entry.title);
+            if (confirmed != true) {
+              return false;
+            }
+            final auth = AuthScope.of(context);
+            final email = auth.currentUser?.email;
+            if (email == null || email.isEmpty) {
+              return false;
+            }
+            await TransactionService.instance.deleteForUser(email, entry.id);
+            await _loadTransactions();
+            return false;
+          } else if (direction == DismissDirection.endToStart) {
+            final updated = await Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => EditExpenseScreen(entry: entry)),
+            );
+            if (updated == true) {
+              await _loadTransactions();
+            }
+            return false;
+          }
+          return false;
+        },
+        background: _buildSwipeBackground(
+          color: const Color(0xFFFF8585),
+          icon: Icons.delete_outline_rounded,
+          alignment: Alignment.centerLeft,
+        ),
+        secondaryBackground: _buildSwipeBackground(
+          color: const Color(0xFF5E5F92),
+          icon: Icons.edit_note_rounded,
+          alignment: Alignment.centerRight,
+        ),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: kDeepBlue.withOpacity(0.04),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              )
+            ],
           ),
-          const SizedBox(width: 15),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(item['name'],
-                    style: GoogleFonts.poppins(
-                        fontWeight: FontWeight.w600, color: kTextDark)),
-                Text(item['time'],
-                    style:
-                        GoogleFonts.poppins(fontSize: 12, color: Colors.grey)),
-              ],
-            ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(color: _colorForCategory(entry.category).withOpacity(0.6), shape: BoxShape.circle),
+                child: Icon(_iconForCategory(entry.category), color: Colors.white, size: 24),
+              ),
+              const SizedBox(width: 15),
+              Expanded(
+                flex: 3,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(entry.title, style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 14, color: kTextDark)),
+                    Text(formatTransactionDateTime(entry.dateTime), style: GoogleFonts.poppins(fontSize: 10, color: kDeepBlue.withOpacity(0.6), fontWeight: FontWeight.w500)),
+                  ],
+                ),
+              ),
+              Container(
+                height: 30,
+                width: 1,
+                color: Colors.grey.withOpacity(0.3),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 2,
+                child: Text(
+                  entry.category,
+                  style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey.shade600, fontWeight: FontWeight.w500),
+                ),
+              ),
+              Text(
+                formatTransactionAmount(entry.amount),
+                style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 15,
+                  color: entry.amount >= 0 ? kTealGreen : const Color(0xFF3EC5BE),
+                ),
+              ),
+            ],
           ),
-          Text(item['amount'],
-              style: GoogleFonts.poppins(
-                  fontWeight: FontWeight.bold, color: const Color(0xFF00D09E))),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSwipeBackground({required Color color, required IconData icon, required Alignment alignment}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 25),
+      alignment: alignment,
+      decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(20)),
+      child: Icon(icon, color: Colors.white, size: 28),
+    );
+  }
+
+  Future<bool?> _showDeleteDialog(String title) {
+    return showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+        title: Text("Delete Transaction", textAlign: TextAlign.center, style: GoogleFonts.poppins(color: kDeepBlue, fontWeight: FontWeight.bold, fontSize: 18)),
+        content: Text("Are you sure you want to delete '$title'?", textAlign: TextAlign.center, style: GoogleFonts.poppins(color: kTextDark.withOpacity(0.7), fontSize: 13)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text("Cancel", style: GoogleFonts.poppins(color: const Color(0xFF5E5F92)))),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text("Delete", style: TextStyle(color: Colors.redAccent))),
         ],
       ),
     );
+  }
+
+  IconData _iconForCategory(String category) {
+    switch (category) {
+      case 'Food':
+        return Icons.restaurant;
+      case 'Transport':
+        return Icons.directions_bus;
+      case 'Medicine':
+        return Icons.medical_services;
+      case 'Groceries':
+        return Icons.shopping_bag;
+      case 'Rent':
+        return Icons.vpn_key;
+      case 'Gifts':
+        return Icons.card_giftcard;
+      case 'Savings':
+        return Icons.savings;
+      case 'Entertainment':
+        return Icons.confirmation_number;
+      default:
+        return Icons.receipt_long;
+    }
+  }
+
+  Color _colorForCategory(String category) {
+    switch (category) {
+      case 'Food':
+        return const Color(0xFF81C9CC);
+      case 'Transport':
+        return const Color(0xFF3EC5BE);
+      case 'Medicine':
+        return const Color(0xFF0F78A2);
+      case 'Groceries':
+        return const Color(0xFF3EC5BE);
+      case 'Rent':
+        return const Color(0xFF0F78A2);
+      case 'Gifts':
+        return const Color(0xFF81C9CC);
+      case 'Savings':
+        return const Color(0xFF81C9CC);
+      case 'Entertainment':
+        return const Color(0xFF5E5F92);
+      default:
+        return const Color(0xFF5E5F92);
+    }
   }
 
   Widget _fadeIn({required Widget child, int delay = 0}) {

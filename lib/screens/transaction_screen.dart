@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'custom_nav_bar.dart';
 import 'budget_setup_screen.dart';
-import 'edit_expense_screen.dart'; 
+import 'edit_expense_screen.dart';
+import '../services/auth_service.dart';
+import '../services/transaction_service.dart';
 
 enum TransactionType { all, income, expense }
 
@@ -21,6 +23,38 @@ class _TransactionScreenState extends State<TransactionScreen> {
   static const kAccentPurple = Color(0xFF5E5F92);
 
   TransactionType selectedType = TransactionType.all;
+  List<TransactionEntry> _transactions = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadTransactions();
+    });
+  }
+
+  Future<void> _loadTransactions() async {
+    final auth = AuthScope.of(context);
+    final email = auth.currentUser?.email;
+    if (email == null || email.isEmpty) {
+      setState(() {
+        _transactions = [];
+        _isLoading = false;
+      });
+      return;
+    }
+
+    final list = await TransactionService.instance.loadForUser(email);
+    list.sort((a, b) => b.dateTime.compareTo(a.dateTime));
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _transactions = list;
+      _isLoading = false;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -70,22 +104,18 @@ class _TransactionScreenState extends State<TransactionScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const SizedBox(height: 35),
-                            if (_shouldShowSection("April")) ...[
-                              _buildSectionHeader("April"),
-                              if (selectedType == TransactionType.all || selectedType == TransactionType.income)
-                                _buildTransactionItem(Icons.payments, "Salary", "18:27 - April 30", "Monthly", "\$4.000,00", const Color(0xFF81C9CC), isPositive: true),
-                              if (selectedType == TransactionType.all || selectedType == TransactionType.expense) ...[
-                                _buildTransactionItem(Icons.shopping_bag, "Groceries", "17:00 - April 24", "Pantry", "-\$100,00", const Color(0xFF3EC5BE)),
-                                _buildTransactionItem(Icons.vpn_key, "Rent", "8:30 - April 15", "Rent", "-\$674,40", const Color(0xFF0F78A2)),
-                                _buildTransactionItem(Icons.directions_bus, "Transport", "7:30 - April 08", "Fuel", "-\$4,13", const Color(0xFF3EC5BE)),
-                              ]
-                            ],
-                            const SizedBox(height: 25),
-                            if (_shouldShowSection("March")) ...[
-                              _buildSectionHeader("March"),
-                              if (selectedType == TransactionType.all || selectedType == TransactionType.expense)
-                                _buildTransactionItem(Icons.restaurant, "Food", "19:30 - March 31", "Dinner", "-\$70,40", const Color(0xFF81C9CC)),
-                            ],
+                            if (_isLoading)
+                              const SizedBox(height: 80)
+                            else if (_filteredTransactions().isEmpty)
+                              Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 20),
+                                child: Text(
+                                  "No transactions to show",
+                                  style: GoogleFonts.poppins(color: Colors.grey),
+                                ),
+                              )
+                            else
+                              ..._buildGroupedTransactions(),
                             const SizedBox(height: 120),
                           ],
                         ),
@@ -101,19 +131,33 @@ class _TransactionScreenState extends State<TransactionScreen> {
     );
   }
 
-  // --- UPDATED TRANSACTION ITEM WITH CATEGORIES ---
-
-  Widget _buildTransactionItem(IconData icon, String title, String time, String category, String amount, Color iconBg, {bool isPositive = false}) {
+  Widget _buildTransactionItem(IconData icon, String title, String time, String category, String amount, Color iconBg, {required TransactionEntry entry, bool isPositive = false}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Dismissible(
-        key: Key(title + time), 
+        key: Key(entry.id),
         confirmDismiss: (direction) async {
           if (direction == DismissDirection.startToEnd) {
-            _showDeleteDialog(title);
+            final confirmed = await _showDeleteDialog(title);
+            if (confirmed != true) {
+              return false;
+            }
+            final auth = AuthScope.of(context);
+            final email = auth.currentUser?.email;
+            if (email == null || email.isEmpty) {
+              return false;
+            }
+            await TransactionService.instance.deleteForUser(email, entry.id);
+            await _loadTransactions();
             return false;
           } else if (direction == DismissDirection.endToStart) {
-            Navigator.push(context, MaterialPageRoute(builder: (context) => const EditExpenseScreen()));
+            final updated = await Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => EditExpenseScreen(entry: entry)),
+            );
+            if (updated == true) {
+              await _loadTransactions();
+            }
             return false;
           }
           return false;
@@ -159,7 +203,6 @@ class _TransactionScreenState extends State<TransactionScreen> {
                   ],
                 ),
               ),
-              // THE CATEGORY COLUMN
               Container(
                 height: 30,
                 width: 1,
@@ -173,13 +216,12 @@ class _TransactionScreenState extends State<TransactionScreen> {
                   style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey.shade600, fontWeight: FontWeight.w500),
                 ),
               ),
-              // AMOUNT COLUMN
               Text(
                 amount,
                 style: GoogleFonts.poppins(
-                  fontWeight: FontWeight.bold, 
+                  fontWeight: FontWeight.bold,
                   fontSize: 15,
-                  color: isPositive ? kTealGreen : const Color(0xFF3EC5BE)
+                  color: isPositive ? kTealGreen : const Color(0xFF3EC5BE),
                 ),
               ),
             ],
@@ -188,8 +230,6 @@ class _TransactionScreenState extends State<TransactionScreen> {
       ),
     );
   }
-
-  // --- REMAINDER OF HELPER METHODS ---
 
   Widget _buildSwipeBackground({required Color color, required IconData icon, required Alignment alignment}) {
     return Container(
@@ -200,8 +240,8 @@ class _TransactionScreenState extends State<TransactionScreen> {
     );
   }
 
-  void _showDeleteDialog(String title) {
-    showDialog(
+  Future<bool?> _showDeleteDialog(String title) {
+    return showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: Colors.white,
@@ -209,18 +249,144 @@ class _TransactionScreenState extends State<TransactionScreen> {
         title: Text("Delete Transaction", textAlign: TextAlign.center, style: GoogleFonts.poppins(color: kDeepBlue, fontWeight: FontWeight.bold, fontSize: 18)),
         content: Text("Are you sure you want to delete '$title'?", textAlign: TextAlign.center, style: GoogleFonts.poppins(color: kTextDark.withOpacity(0.7), fontSize: 13)),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: Text("Cancel", style: GoogleFonts.poppins(color: kAccentPurple))),
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Delete", style: TextStyle(color: Colors.redAccent))),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text("Cancel", style: GoogleFonts.poppins(color: kAccentPurple))),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text("Delete", style: TextStyle(color: Colors.redAccent))),
         ],
       ),
     );
   }
 
-  bool _shouldShowSection(String month) {
-    if (selectedType == TransactionType.all) return true;
-    if (month == "April") return true; 
-    if (month == "March" && selectedType == TransactionType.expense) return true;
-    return false;
+  List<TransactionEntry> _filteredTransactions() {
+    if (selectedType == TransactionType.all) {
+      return _transactions;
+    }
+    if (selectedType == TransactionType.income) {
+      return _transactions.where((entry) => entry.amount >= 0).toList();
+    }
+    return _transactions.where((entry) => entry.amount < 0).toList();
+  }
+
+  List<Widget> _buildGroupedTransactions() {
+    final filtered = _filteredTransactions();
+    if (filtered.isEmpty) {
+      return [];
+    }
+
+    final Map<String, List<TransactionEntry>> grouped = {};
+    for (final entry in filtered) {
+      final label = _monthLabel(entry.dateTime);
+      grouped.putIfAbsent(label, () => []).add(entry);
+    }
+
+    final keys = grouped.keys.toList();
+    keys.sort((a, b) => _monthIndex(b).compareTo(_monthIndex(a)));
+
+    final List<Widget> widgets = [];
+    for (final key in keys) {
+      widgets.add(_buildSectionHeader(key));
+      for (final entry in grouped[key]!) {
+        widgets.add(
+          _buildTransactionItem(
+            _iconForCategory(entry.category),
+            entry.title,
+            formatTransactionDateTime(entry.dateTime),
+            entry.category,
+            formatTransactionAmount(entry.amount),
+            _colorForCategory(entry.category),
+            entry: entry,
+            isPositive: entry.amount >= 0,
+          ),
+        );
+      }
+      widgets.add(const SizedBox(height: 25));
+    }
+    return widgets;
+  }
+
+  String _monthLabel(DateTime dateTime) {
+    const months = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ];
+    return months[dateTime.month - 1];
+  }
+
+  int _monthIndex(String month) {
+    const months = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ];
+    return months.indexOf(month);
+  }
+
+  IconData _iconForCategory(String category) {
+    switch (category) {
+      case 'Income':
+        return Icons.payments;
+      case 'Food':
+        return Icons.restaurant;
+      case 'Transport':
+        return Icons.directions_bus;
+      case 'Medicine':
+        return Icons.medical_services;
+      case 'Groceries':
+        return Icons.shopping_bag;
+      case 'Rent':
+        return Icons.vpn_key;
+      case 'Gifts':
+        return Icons.card_giftcard;
+      case 'Savings':
+        return Icons.savings;
+      case 'Entertainment':
+        return Icons.confirmation_number;
+      default:
+        return Icons.receipt_long;
+    }
+  }
+
+  Color _colorForCategory(String category) {
+    switch (category) {
+      case 'Income':
+        return const Color(0xFF81C9CC);
+      case 'Food':
+        return const Color(0xFF81C9CC);
+      case 'Transport':
+        return const Color(0xFF3EC5BE);
+      case 'Medicine':
+        return const Color(0xFF0F78A2);
+      case 'Groceries':
+        return const Color(0xFF3EC5BE);
+      case 'Rent':
+        return const Color(0xFF0F78A2);
+      case 'Gifts':
+        return const Color(0xFF81C9CC);
+      case 'Savings':
+        return const Color(0xFF81C9CC);
+      case 'Entertainment':
+        return const Color(0xFF5E5F92);
+      default:
+        return const Color(0xFF5E5F92);
+    }
   }
 
   Widget _buildAppBar() {
@@ -246,9 +412,9 @@ class _TransactionScreenState extends State<TransactionScreen> {
           const SizedBox(height: 15),
           Row(
             children: [
-              _buildFilterCard("Income", "\$4,120.00", Icons.outbox, Colors.black, TransactionType.income),
+              _buildFilterCard("Income", _formatCurrency(_totalIncome), Icons.outbox, Colors.black, TransactionType.income),
               const SizedBox(width: 15),
-              _buildFilterCard("Expense", "\$1.187.40", Icons.move_to_inbox, const Color(0xFF0077B6), TransactionType.expense),
+              _buildFilterCard("Expense", _formatCurrency(_totalExpenses), Icons.move_to_inbox, const Color(0xFF0077B6), TransactionType.expense),
             ],
           ),
           const SizedBox(height: 15),
@@ -265,14 +431,14 @@ class _TransactionScreenState extends State<TransactionScreen> {
         width: double.infinity,
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: selectedType == TransactionType.all ? Colors.white : Colors.white.withOpacity(0.7), 
+          color: selectedType == TransactionType.all ? Colors.white : Colors.white.withOpacity(0.7),
           borderRadius: BorderRadius.circular(20),
           border: selectedType == TransactionType.all ? Border.all(color: kTealGreen, width: 2) : null,
         ),
         child: Column(
           children: [
             Text("Total Balance", style: GoogleFonts.poppins(color: kDeepBlue, fontSize: 14)),
-            Text("\$7,783.00", style: GoogleFonts.poppins(color: kDeepBlue, fontSize: 28, fontWeight: FontWeight.bold)),
+            Text(_formatCurrency(_balance, signed: true), style: GoogleFonts.poppins(color: kDeepBlue, fontSize: 28, fontWeight: FontWeight.bold)),
           ],
         ),
       ),
@@ -296,14 +462,14 @@ class _TransactionScreenState extends State<TransactionScreen> {
   }
 
   Widget _buildFilterCard(String label, String amount, IconData icon, Color amountColor, TransactionType type) {
-    bool isSelected = selectedType == type;
+    final isSelected = selectedType == type;
     return Expanded(
       child: GestureDetector(
         onTap: () => setState(() => selectedType = type),
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 15),
           decoration: BoxDecoration(
-            color: isSelected ? const Color(0xFF2E2E5D) : Colors.white, 
+            color: isSelected ? const Color(0xFF2E2E5D) : Colors.white,
             borderRadius: BorderRadius.circular(20),
           ),
           child: Column(
@@ -332,6 +498,21 @@ class _TransactionScreenState extends State<TransactionScreen> {
     );
   }
 
+  double get _totalIncome => _transactions.where((entry) => entry.amount >= 0).fold(0.0, (sum, entry) => sum + entry.amount);
+
+  double get _totalExpenses => _transactions.where((entry) => entry.amount < 0).fold(0.0, (sum, entry) => sum + entry.amount.abs());
+
+  double get _balance => _transactions.fold(0.0, (sum, entry) => sum + entry.amount);
+
+  String _formatCurrency(double amount, {bool signed = false}) {
+    final value = amount.abs().toStringAsFixed(2);
+    if (signed) {
+      final sign = amount < 0 ? '-' : '';
+      return '$sign Rs $value';
+    }
+    return 'Rs $value';
+  }
+
   Widget _fadeIn({required Widget child, int delay = 0}) {
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0.0, end: 1.0),
@@ -344,17 +525,18 @@ class _TransactionScreenState extends State<TransactionScreen> {
 
   Widget _buildAnimatedBubble({required double left, required double top, required double size}) {
     return Positioned(
-      left: left, top: top,
+      left: left,
+      top: top,
       child: Opacity(
-        opacity: 0.50, 
+        opacity: 0.50,
         child: Container(
-          width: size, 
-          height: size, 
+          width: size,
+          height: size,
           decoration: const ShapeDecoration(
-            gradient: LinearGradient(colors: [Color(0xFF191A4C), Color(0xFF3A3CB2)]), 
-            shape: OvalBorder()
-          )
-        )
+            gradient: LinearGradient(colors: [Color(0xFF191A4C), Color(0xFF3A3CB2)]),
+            shape: OvalBorder(),
+          ),
+        ),
       ),
     );
   }

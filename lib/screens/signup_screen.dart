@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'activation_screen.dart';
+import '../services/auth_service.dart';
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
@@ -17,7 +18,11 @@ class _SignUpScreenState extends State<SignUpScreen> with TickerProviderStateMix
   bool _isConfirmObscured = true;
 
   // Controllers for validation
+  final TextEditingController _fullNameController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passController = TextEditingController();
+  final TextEditingController _confirmController = TextEditingController();
+  String? _errorText;
 
   // Validation States
   bool hasUppercase = false;
@@ -51,7 +56,10 @@ class _SignUpScreenState extends State<SignUpScreen> with TickerProviderStateMix
 
   @override
   void dispose() {
+    _fullNameController.dispose();
+    _emailController.dispose();
     _passController.dispose();
+    _confirmController.dispose();
     super.dispose();
   }
 
@@ -99,11 +107,17 @@ class _SignUpScreenState extends State<SignUpScreen> with TickerProviderStateMix
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                             _buildLabel("Full Name"),
-                            _buildGlassTextField(hint: "John Doe"),
+                            _buildGlassTextField(
+                              hint: "John Doe",
+                              controller: _fullNameController,
+                            ),
                             const SizedBox(height: 20),
 
                             _buildLabel("Email"),
-                            _buildGlassTextField(hint: "example@example.com"),
+                            _buildGlassTextField(
+                              hint: "example@example.com",
+                              controller: _emailController,
+                            ),
                             const SizedBox(height: 20),
 
                             _buildLabel("Password"),
@@ -131,23 +145,86 @@ class _SignUpScreenState extends State<SignUpScreen> with TickerProviderStateMix
                             _buildGlassTextField(
                               hint: "••••••••",
                               isPassword: true,
+                              controller: _confirmController,
                               obscureText: _isConfirmObscured,
                               toggleVisibility: () {
                                 HapticFeedback.selectionClick();
                                 setState(() => _isConfirmObscured = !_isConfirmObscured);
                               },
                             ),
+                            if (_errorText != null) ...[
+                              const SizedBox(height: 10),
+                              Text(
+                                _errorText!,
+                                style: GoogleFonts.poppins(
+                                  color: Colors.redAccent,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
                             const SizedBox(height: 30),
 
                             _buildMainButton(
                               text: "Sign Up",
                               color: Colors.white,
                               textColor: kDeepBlue,
-                              onPressed: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(builder: (_) => const ActivationScreen()),
+                              onPressed: () async {
+                                final fullName = _fullNameController.text.trim();
+                                final email = _emailController.text.trim();
+                                final password = _passController.text;
+                                final confirmPassword = _confirmController.text;
+
+                                if (fullName.isEmpty || email.isEmpty) {
+                                  setState(() {
+                                    _errorText = 'Please complete all required fields.';
+                                  });
+                                  return;
+                                }
+
+                                if (!email.contains('@')) {
+                                  setState(() {
+                                    _errorText = 'Please enter a valid email address.';
+                                  });
+                                  return;
+                                }
+
+                                if (!hasUppercase || !hasDigits || !hasSpecialCharacters || !hasMinLength) {
+                                  setState(() {
+                                    _errorText = 'Please meet all password requirements.';
+                                  });
+                                  return;
+                                }
+
+                                if (password != confirmPassword) {
+                                  setState(() {
+                                    _errorText = 'Passwords do not match.';
+                                  });
+                                  return;
+                                }
+
+                                final auth = AuthScope.of(context);
+                                final saved = await auth.signUp(
+                                  fullName: fullName,
+                                  email: email,
+                                  password: password,
                                 );
+
+                                if (!mounted) {
+                                  return;
+                                }
+
+                                if (saved) {
+                                  setState(() => _errorText = null);
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(builder: (_) => const ActivationScreen()),
+                                  );
+                                } else {
+                                  setState(() {
+                                    _errorText = 'Unable to save signup details. Try again.';
+                                  });
+                                }
                               },
                             ),
 

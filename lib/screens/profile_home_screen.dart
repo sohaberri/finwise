@@ -5,6 +5,8 @@ import 'custom_nav_bar.dart';
 import 'edit_profile_screen.dart';
 import 'security_screen.dart';
 import 'settings_screen.dart';
+import 'login_screen.dart';
+import '../services/auth_service.dart';
 
 class ProfileHomeScreen extends StatefulWidget {
   const ProfileHomeScreen({super.key});
@@ -97,7 +99,18 @@ class _ProfileHomeScreenState extends State<ProfileHomeScreen> {
                                         Navigator.push(context, MaterialPageRoute(builder: (context) => const SettingsScreen()));
                                       }),
                                       _buildMenuTile(Icons.headset_mic_outlined, "Help", const Color(0xFF81C9CC)),
-                                      _buildMenuTile(Icons.logout_rounded, "Logout", const Color(0xFF3EC5BE)),
+                                      _buildMenuTile(Icons.logout_rounded, "Logout", const Color(0xFF3EC5BE), onTap: () async {
+                                        final auth = AuthScope.of(context);
+                                        await auth.logout();
+                                        if (!mounted) {
+                                          return;
+                                        }
+                                        Navigator.pushAndRemoveUntil(
+                                          context,
+                                          MaterialPageRoute(builder: (context) => const LoginScreen()),
+                                          (route) => false,
+                                        );
+                                      }),
                                       const SizedBox(height: 120), // Dynamic space for Hot Bar
                                     ],
                                   ),

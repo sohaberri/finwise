@@ -4,6 +4,8 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'custom_nav_bar.dart';
 import 'ocr_screen.dart';
+import '../services/auth_service.dart';
+import '../services/transaction_service.dart';
 
 class AddExpensesScreen extends StatefulWidget {
   const AddExpensesScreen({super.key});
@@ -20,7 +22,11 @@ class _AddExpensesScreenState extends State<AddExpensesScreen> with TickerProvid
   static const kAccentPurple = Color(0xFF5E5F92);
 
   final TextEditingController _dateController = TextEditingController();
+  final TextEditingController _titleController = TextEditingController();
+  final TextEditingController _amountController = TextEditingController();
+  final TextEditingController _notesController = TextEditingController();
   DateTime _selectedDate = DateTime.now();
+  String _selectedCategory = TransactionService.categories.first;
 
   // Voice Animation Logic
   bool isListening = false;
@@ -39,6 +45,9 @@ class _AddExpensesScreenState extends State<AddExpensesScreen> with TickerProvid
   @override
   void dispose() {
     _dateController.dispose();
+    _titleController.dispose();
+    _amountController.dispose();
+    _notesController.dispose();
     _pulseController.dispose();
     super.dispose();
   }
@@ -162,18 +171,21 @@ class _AddExpensesScreenState extends State<AddExpensesScreen> with TickerProvid
                           const SizedBox(height: 35),
                           _buildInputField("Date", "Select date", suffixIcon: Icons.calendar_month, controller: _dateController, readOnly: true, onTap: _selectDate),
                           const SizedBox(height: 25),
-                          _buildInputField("Category", "Select the category"),
+                          _buildCategoryDropdown(),
                           const SizedBox(height: 25),
-                          _buildInputField("Amount", "\$0.00"),
+                          _buildInputField("Amount", "Rs 0.00", controller: _amountController),
                           const SizedBox(height: 25),
-                          _buildInputField("Expense Title", "Dinner"),
+                          _buildInputField("Expense Title", "Dinner", controller: _titleController),
                           const SizedBox(height: 25),
-                          _buildInputField("Enter Message", "", isTextArea: true),
+                          _buildInputField("Enter Message", "", isTextArea: true, controller: _notesController),
                           const SizedBox(height: 40),
                           
                           Center(
                             child: ElevatedButton(
-                              onPressed: () => HapticFeedback.mediumImpact(),
+                              onPressed: () async {
+                                HapticFeedback.mediumImpact();
+                                await _saveExpense();
+                              },
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: Colors.white, foregroundColor: kTextDark,
                                 minimumSize: const Size(200, 50),
@@ -247,7 +259,7 @@ class _AddExpensesScreenState extends State<AddExpensesScreen> with TickerProvid
           const SizedBox(height: 30),
           Text("Listening...", style: GoogleFonts.poppins(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
           const SizedBox(height: 10),
-          Text("Try saying: 'Dinner 45 dollars'", style: GoogleFonts.poppins(color: Colors.white70, fontSize: 14)),
+          Text("Try saying: 'Dinner 45 rupees'", style: GoogleFonts.poppins(color: Colors.white70, fontSize: 14)),
           const SizedBox(height: 50),
           TextButton(
             onPressed: () => setState(() => isListening = false),
@@ -282,6 +294,90 @@ class _AddExpensesScreenState extends State<AddExpensesScreen> with TickerProvid
         ),
       ],
     );
+  }
+
+  Widget _buildCategoryDropdown() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text("Category", style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600, color: kTextDark.withOpacity(0.8))),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 5),
+          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: _selectedCategory,
+              isExpanded: true,
+              icon: const Icon(Icons.keyboard_arrow_down_rounded, color: kAccentPurple),
+              style: GoogleFonts.poppins(color: kTextDark, fontSize: 15),
+              items: TransactionService.categories
+                  .map((category) => DropdownMenuItem<String>(
+                        value: category,
+                        child: Text(category),
+                      ))
+                  .toList(),
+              onChanged: (value) {
+                if (value == null) {
+                  return;
+                }
+                setState(() {
+                  _selectedCategory = value;
+                });
+              },
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _saveExpense() async {
+    final auth = AuthScope.of(context);
+    final email = auth.currentUser?.email;
+    if (email == null || email.isEmpty) {
+      return;
+    }
+
+    final title = _titleController.text.trim();
+    final rawAmount = _amountController.text.trim().replaceAll(',', '');
+    final notes = _notesController.text.trim();
+
+    if (title.isEmpty || rawAmount.isEmpty) {
+      return;
+    }
+
+    final cleanedAmount = rawAmount.replaceAll(RegExp(r'(?i)rs'), '').replaceAll('\$', '').trim();
+    final parsed = double.tryParse(cleanedAmount);
+    if (parsed == null) {
+      return;
+    }
+
+    final now = DateTime.now();
+    final dateTime = DateTime(
+      _selectedDate.year,
+      _selectedDate.month,
+      _selectedDate.day,
+      now.hour,
+      now.minute,
+    );
+
+    final entry = TransactionEntry(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      title: title,
+      category: _selectedCategory,
+      amount: -parsed.abs(),
+      dateTime: dateTime,
+      description: notes.isEmpty ? null : notes,
+    );
+
+    await TransactionService.instance.addForUser(email, entry);
+
+    if (!mounted) {
+      return;
+    }
+
+    Navigator.pop(context, true);
   }
 
   Widget _buildAppBar() {

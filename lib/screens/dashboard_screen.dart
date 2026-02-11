@@ -4,6 +4,10 @@ import 'package:google_fonts/google_fonts.dart';
 import 'custom_nav_bar.dart';
 import 'profile_home_screen.dart';
 import 'add_expenses_Screen.dart';
+import 'edit_expense_screen.dart';
+import '../services/auth_service.dart';
+import '../services/transaction_service.dart';
+import '../services/budget_service.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -21,6 +25,55 @@ class _DashboardScreenState extends State<DashboardScreen> {
   static const kDarkCard = Color(0xFF191A4C);
 
   String selectedPeriod = 'Monthly'; 
+  List<TransactionEntry> _transactions = [];
+  bool _isLoading = true;
+  double _monthlyIncome = 0.0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadTransactions();
+      _loadBudget();
+    });
+  }
+
+  Future<void> _loadBudget() async {
+    final auth = AuthScope.of(context);
+    final email = auth.currentUser?.email;
+    if (email == null || email.isEmpty) {
+      return;
+    }
+    final saved = await BudgetService.instance.loadForUser(email);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _monthlyIncome = saved?.monthlyIncome ?? 0.0;
+    });
+  }
+
+  Future<void> _loadTransactions() async {
+    final auth = AuthScope.of(context);
+    final email = auth.currentUser?.email;
+    if (email == null || email.isEmpty) {
+      setState(() {
+        _transactions = [];
+        _isLoading = false;
+      });
+      return;
+    }
+
+    final list = await TransactionService.instance.loadForUser(email);
+    list.sort((a, b) => b.dateTime.compareTo(a.dateTime));
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _transactions = list;
+      _isLoading = false;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -83,9 +136,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             const SizedBox(height: 25),
                             _buildPeriodToggle(),
                             const SizedBox(height: 20),
-                            _buildTransactionItem(Icons.payments, "Salary", "18:27 - April 30", "Monthly", "\$4.000,00", const Color(0xFF81C9CC), isPositive: true),
-                            _buildTransactionItem(Icons.shopping_bag, "Groceries", "17:00 - April 24", "Pantry", "-\$100,00", const Color(0xFF3EC5BE)),
-                            _buildTransactionItem(Icons.vpn_key, "Rent", "8:30 - April 15", "Rent", "-\$674,40", const Color(0xFF0F78A2)),
+                            if (_isLoading)
+                              const SizedBox(height: 80)
+                            else if (_transactions.isEmpty)
+                              Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 20),
+                                child: Text(
+                                  "No transactions to show",
+                                  style: GoogleFonts.poppins(color: Colors.grey),
+                                ),
+                              )
+                            else
+                              ..._transactions.map((entry) => _buildTransactionItem(
+                                    _iconForCategory(entry.category),
+                                    entry.title,
+                                    formatTransactionDateTime(entry.dateTime),
+                                    entry.category,
+                                    formatTransactionAmount(entry.amount),
+                                    _colorForCategory(entry.category),
+                                    entry: entry,
+                                    isPositive: entry.amount >= 0,
+                                  )),
                             const SizedBox(height: 100), 
                           ],
                         ),
@@ -121,6 +192,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildBalanceSection() {
+    final totalIncome = _totalIncome;
+    final totalExpense = _totalExpenses;
+    final balance = _balance;
+    final usagePercent = _monthlyIncome > 0 ? (totalExpense / _monthlyIncome).clamp(0.0, 1.0) : 0.0;
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 25),
       child: Column(
@@ -128,8 +204,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _buildBalanceText("Total Balance", "\$7,783.00"),
-              _buildBalanceText("Total Expense", "-\$1.187.40", isExpense: true),
+              _buildBalanceText("Total Balance", _formatCurrency(balance, signed: true)),
+              _buildBalanceText("Total Expense", _formatCurrency(totalExpense, signed: true), isExpense: true),
             ],
           ),
           const SizedBox(height: 20),
@@ -145,20 +221,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
             child: Stack(
               children: [
                 FractionallySizedBox(
-                  widthFactor: 0.3, // 30% progress
+                  widthFactor: usagePercent,
                   child: Container(
                     decoration: BoxDecoration(
                       color: Colors.black,
                       borderRadius: BorderRadius.circular(15),
                     ),
                     alignment: Alignment.center,
-                    child: const Text("30%", style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                    child: Text(
+                      "${(usagePercent * 100).round()}%",
+                      style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                    ),
                   ),
                 ),
                 Positioned(
                   right: 15,
                   top: 4,
-                  child: Text("\$20,000.00", style: GoogleFonts.poppins(color: kDeepBlue, fontSize: 12, fontWeight: FontWeight.bold, fontStyle: FontStyle.italic)),
+                  child: Text(
+                    _formatCurrency(_monthlyIncome),
+                    style: GoogleFonts.poppins(color: kDeepBlue, fontSize: 12, fontWeight: FontWeight.bold, fontStyle: FontStyle.italic),
+                  ),
                 )
               ],
             ),
@@ -170,14 +252,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
             children: [
               const Icon(Icons.check_box_outlined, color: Colors.white, size: 18),
               const SizedBox(width: 8),
-              Text("30% Of Your Income has been used!", style: GoogleFonts.poppins(color: Colors.white, fontSize: 13)),
+              Text(
+                _monthlyIncome > 0
+                    ? "${(usagePercent * 100).round()}% Of Your Income has been used!"
+                    : "Set a monthly income to track spending.",
+                style: GoogleFonts.poppins(color: Colors.white, fontSize: 13),
+              ),
             ],
           ),
           const SizedBox(height: 20),
 
           ElevatedButton(
-            onPressed: () {
-              Navigator.push(context, MaterialPageRoute(builder: (context) => const AddExpensesScreen()));
+            onPressed: () async {
+              final added = await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const AddExpensesScreen()),
+              );
+              if (added == true) {
+                await _loadTransactions();
+              }
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: kAccentPurple,
@@ -207,6 +300,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildSummaryCard() {
+    final revenueLastWeek = _revenueLastWeek;
+    final foodLastWeek = _foodLastWeek;
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(color: kDarkCard, borderRadius: BorderRadius.circular(35)),
@@ -217,9 +312,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
           Expanded(
             child: Column(
               children: [
-                _buildSmallStat("Revenue Last Week", "\$4.000.00"),
+                _buildSmallStat("Revenue Last Week", _formatCurrency(revenueLastWeek)),
                 const Divider(color: Colors.white24),
-                _buildSmallStat("Food Last Week", "-\$100.00", isNegative: true),
+                _buildSmallStat("Food Last Week", _formatCurrency(foodLastWeek, signed: true), isNegative: true),
               ],
             ),
           )
@@ -259,26 +354,183 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildTransactionItem(IconData icon, String title, String time, String category, String amount, Color color, {bool isPositive = false}) {
+  Widget _buildTransactionItem(IconData icon, String title, String time, String category, String amount, Color color, {TransactionEntry? entry, bool isPositive = false}) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: color.withOpacity(0.3), borderRadius: BorderRadius.circular(15)),
-            child: Icon(icon, color: color, size: 28),
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Dismissible(
+        key: Key('$title$time'),
+        confirmDismiss: (direction) async {
+          if (direction == DismissDirection.startToEnd) {
+            if (entry == null) {
+              await _showDeleteDialog(title);
+              return false;
+            }
+            final confirmed = await _showDeleteDialog(title);
+            if (confirmed != true) {
+              return false;
+            }
+            final auth = AuthScope.of(context);
+            final email = auth.currentUser?.email;
+            if (email == null || email.isEmpty) {
+              return false;
+            }
+            await TransactionService.instance.deleteForUser(email, entry.id);
+            await _loadTransactions();
+            return false;
+          } else if (direction == DismissDirection.endToStart) {
+            if (entry == null) {
+              return false;
+            }
+            final updated = await Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => EditExpenseScreen(entry: entry)),
+            );
+            if (updated == true) {
+              await _loadTransactions();
+            }
+            return false;
+          }
+          return false;
+        },
+        background: _buildSwipeBackground(
+          color: const Color(0xFFFF8585),
+          icon: Icons.delete_outline_rounded,
+          alignment: Alignment.centerLeft,
+        ),
+        secondaryBackground: _buildSwipeBackground(
+          color: kAccentPurple.withOpacity(0.9),
+          icon: Icons.edit_note_rounded,
+          alignment: Alignment.centerRight,
+        ),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: kDeepBlue.withOpacity(0.04),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              )
+            ],
           ),
-          const SizedBox(width: 15),
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(title, style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: kTextDark)),
-              Text(time, style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey)),
-            ]),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(color: color.withOpacity(0.6), shape: BoxShape.circle),
+                child: Icon(icon, color: Colors.white, size: 24),
+              ),
+              const SizedBox(width: 15),
+              Expanded(
+                flex: 3,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 14, color: kTextDark)),
+                    Text(time, style: GoogleFonts.poppins(fontSize: 10, color: kDeepBlue.withOpacity(0.6), fontWeight: FontWeight.w500)),
+                  ],
+                ),
+              ),
+              Container(
+                height: 30,
+                width: 1,
+                color: Colors.grey.withOpacity(0.3),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 2,
+                child: Text(
+                  category,
+                  style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey.shade600, fontWeight: FontWeight.w500),
+                ),
+              ),
+              Text(
+                amount,
+                style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 15,
+                  color: isPositive ? kTealGreen : const Color(0xFF3EC5BE),
+                ),
+              ),
+            ],
           ),
-          Text(category, style: GoogleFonts.poppins(color: Colors.grey, fontSize: 13)),
-          const SizedBox(width: 20),
-          Text(amount, style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: isPositive ? Colors.teal : kTextDark)),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSwipeBackground({required Color color, required IconData icon, required Alignment alignment}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 25),
+      alignment: alignment,
+      decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(20)),
+      child: Icon(icon, color: Colors.white, size: 28),
+    );
+  }
+
+  IconData _iconForCategory(String category) {
+    switch (category) {
+      case 'Income':
+        return Icons.payments;
+      case 'Food':
+        return Icons.restaurant;
+      case 'Transport':
+        return Icons.directions_bus;
+      case 'Medicine':
+        return Icons.medical_services;
+      case 'Groceries':
+        return Icons.shopping_bag;
+      case 'Rent':
+        return Icons.vpn_key;
+      case 'Gifts':
+        return Icons.card_giftcard;
+      case 'Savings':
+        return Icons.savings;
+      case 'Entertainment':
+        return Icons.confirmation_number;
+      default:
+        return Icons.receipt_long;
+    }
+  }
+
+  Color _colorForCategory(String category) {
+    switch (category) {
+      case 'Income':
+        return const Color(0xFF81C9CC);
+      case 'Food':
+        return const Color(0xFF81C9CC);
+      case 'Transport':
+        return const Color(0xFF3EC5BE);
+      case 'Medicine':
+        return const Color(0xFF0F78A2);
+      case 'Groceries':
+        return const Color(0xFF3EC5BE);
+      case 'Rent':
+        return const Color(0xFF0F78A2);
+      case 'Gifts':
+        return const Color(0xFF81C9CC);
+      case 'Savings':
+        return const Color(0xFF81C9CC);
+      case 'Entertainment':
+        return const Color(0xFF5E5F92);
+      default:
+        return const Color(0xFF5E5F92);
+    }
+  }
+
+  Future<bool?> _showDeleteDialog(String title) {
+    return showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+        title: Text("Delete Transaction", textAlign: TextAlign.center, style: GoogleFonts.poppins(color: kDeepBlue, fontWeight: FontWeight.bold, fontSize: 18)),
+        content: Text("Are you sure you want to delete '$title'?", textAlign: TextAlign.center, style: GoogleFonts.poppins(color: kTextDark.withOpacity(0.7), fontSize: 13)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text("Cancel", style: GoogleFonts.poppins(color: kAccentPurple))),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text("Delete", style: TextStyle(color: Colors.redAccent))),
         ],
       ),
     );
@@ -286,6 +538,35 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildGoalCircle() { return Container(width: 80, height: 80, decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.cyanAccent, width: 3)), child: const Center(child: Icon(Icons.directions_car, color: Colors.white, size: 35))); }
   Widget _buildSmallStat(String label, String val, {bool isNegative = false}) { return Column(children: [Text(label, style: GoogleFonts.poppins(color: Colors.white70, fontSize: 11)), Text(val, style: GoogleFonts.poppins(color: isNegative ? Colors.cyanAccent : Colors.white, fontWeight: FontWeight.bold))]); }
+
+  double get _totalIncome => _transactions.where((entry) => entry.amount >= 0).fold(0.0, (sum, entry) => sum + entry.amount);
+
+  double get _totalExpenses => _transactions.where((entry) => entry.amount < 0).fold(0.0, (sum, entry) => sum + entry.amount.abs());
+
+  double get _balance => _transactions.fold(0.0, (sum, entry) => sum + entry.amount);
+
+  double get _revenueLastWeek {
+    final cutoff = DateTime.now().subtract(const Duration(days: 7));
+    return _transactions
+        .where((entry) => entry.amount > 0 && entry.dateTime.isAfter(cutoff))
+        .fold(0.0, (sum, entry) => sum + entry.amount);
+  }
+
+  double get _foodLastWeek {
+    final cutoff = DateTime.now().subtract(const Duration(days: 7));
+    return _transactions
+        .where((entry) => entry.amount < 0 && entry.category == 'Food' && entry.dateTime.isAfter(cutoff))
+        .fold(0.0, (sum, entry) => sum + entry.amount.abs());
+  }
+
+  String _formatCurrency(double amount, {bool signed = false}) {
+    final value = amount.abs().toStringAsFixed(2);
+    if (signed) {
+      final sign = amount < 0 ? '-' : '';
+      return '$sign Rs $value';
+    }
+    return 'Rs $value';
+  }
   
   Widget _fadeIn({required Widget child, int delay = 0}) {
     return TweenAnimationBuilder<double>(

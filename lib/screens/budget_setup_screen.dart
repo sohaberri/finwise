@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../services/auth_service.dart';
+import '../services/budget_service.dart';
+import '../services/transaction_service.dart';
 
 class BudgetSetupScreen extends StatefulWidget {
   const BudgetSetupScreen({super.key});
@@ -16,36 +19,102 @@ class _BudgetSetupScreenState extends State<BudgetSetupScreen> {
   static const kTextDark = Color(0xFF052224);
   static const kAccentPurple = Color(0xFF5E5F92);
 
-  double totalIncome = 5000.0;
+  double totalIncome = 0.0;
+  final TextEditingController _incomeController = TextEditingController();
   
   // Storing controllers in a map to track category allocations
   final Map<String, TextEditingController> _controllers = {};
   
   final List<Map<String, dynamic>> categories = [
-    {"name": "Food", "icon": Icons.restaurant, "initial": "500"},
-    {"name": "Transport", "icon": Icons.directions_bus, "initial": "200"},
-    {"name": "Medicine", "icon": Icons.medical_services, "initial": "100"},
-    {"name": "Groceries", "icon": Icons.shopping_basket, "initial": "400"},
-    {"name": "Rent", "icon": Icons.vpn_key, "initial": "1500"},
-    {"name": "Gifts", "icon": Icons.card_giftcard, "initial": "50"},
-    {"name": "Savings", "icon": Icons.savings, "initial": "1000"},
-    {"name": "Entertainment", "icon": Icons.confirmation_number, "initial": "200"},
+    {"name": "Food", "icon": Icons.restaurant},
+    {"name": "Transport", "icon": Icons.directions_bus},
+    {"name": "Medicine", "icon": Icons.medical_services},
+    {"name": "Groceries", "icon": Icons.shopping_basket},
+    {"name": "Rent", "icon": Icons.vpn_key},
+    {"name": "Gifts", "icon": Icons.card_giftcard},
+    {"name": "Savings", "icon": Icons.savings},
+    {"name": "Entertainment", "icon": Icons.confirmation_number},
   ];
 
   @override
   void initState() {
     super.initState();
     for (var cat in categories) {
-      _controllers[cat['name']] = TextEditingController(text: cat['initial']);
+      _controllers[cat['name']] = TextEditingController(text: '0');
     }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadBudget();
+    });
   }
 
   @override
   void dispose() {
+    _incomeController.dispose();
     for (var controller in _controllers.values) {
       controller.dispose();
     }
     super.dispose();
+  }
+
+  Future<void> _loadBudget() async {
+    final auth = AuthScope.of(context);
+    final email = auth.currentUser?.email;
+    if (email == null || email.isEmpty) {
+      return;
+    }
+
+    final saved = await BudgetService.instance.loadForUser(email);
+    if (saved == null) {
+      return;
+    }
+
+    setState(() {
+      totalIncome = saved.monthlyIncome;
+      _incomeController.text = saved.monthlyIncome.toStringAsFixed(2);
+      saved.allocations.forEach((key, value) {
+        if (_controllers.containsKey(key)) {
+          _controllers[key]!.text = value.toStringAsFixed(0);
+        }
+      });
+    });
+  }
+
+  Future<void> _saveBudget() async {
+    final auth = AuthScope.of(context);
+    final email = auth.currentUser?.email;
+    if (email == null || email.isEmpty) {
+      return;
+    }
+
+    final allocations = <String, double>{};
+    _controllers.forEach((key, controller) {
+      allocations[key] = double.tryParse(controller.text) ?? 0.0;
+    });
+
+    final budget = BudgetData(
+      monthlyIncome: totalIncome,
+      allocations: allocations,
+    );
+
+    final shouldAddIncome = await BudgetService.instance.saveForUser(email, budget);
+
+    if (shouldAddIncome) {
+      // TODO: Replace with backend transaction creation for income.
+      final entry = TransactionEntry(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        title: 'Monthly Income',
+        category: 'Income',
+        amount: totalIncome,
+        dateTime: DateTime.now(),
+      );
+      await TransactionService.instance.addForUser(email, entry);
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    Navigator.pop(context, true);
   }
 
   double get _totalAllocated {
@@ -142,11 +211,12 @@ class _BudgetSetupScreenState extends State<BudgetSetupScreen> {
                 SizedBox(
                   width: 150,
                   child: TextField(
+                    controller: _incomeController,
                     onChanged: (val) => setState(() => totalIncome = double.tryParse(val) ?? 0),
                     keyboardType: TextInputType.number,
                     style: GoogleFonts.poppins(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
                     decoration: const InputDecoration(
-                      prefixText: "\$ ",
+                      prefixText: "Rs ",
                       prefixStyle: TextStyle(color: Colors.white),
                       border: InputBorder.none,
                       hintText: "0.00",
@@ -179,7 +249,7 @@ class _BudgetSetupScreenState extends State<BudgetSetupScreen> {
             style: GoogleFonts.poppins(fontWeight: FontWeight.w600, color: isOver ? Colors.red : kDeepBlue),
           ),
           Text(
-            "\$${_remaining.toStringAsFixed(0)}",
+            "Rs ${_remaining.toStringAsFixed(0)}",
             style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 18, color: isOver ? Colors.red : kDeepBlue),
           ),
         ],
@@ -218,7 +288,7 @@ class _BudgetSetupScreenState extends State<BudgetSetupScreen> {
                 textAlign: TextAlign.right,
                 style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: kDeepBlue),
                 decoration: const InputDecoration(
-                  prefixText: "\$ ",
+                  prefixText: "Rs ",
                   border: InputBorder.none,
                 ),
               ),
@@ -234,7 +304,10 @@ class _BudgetSetupScreenState extends State<BudgetSetupScreen> {
       color: kFormBg,
       padding: const EdgeInsets.fromLTRB(25, 15, 25, 40),
       child: ElevatedButton(
-        onPressed: () => HapticFeedback.mediumImpact(),
+        onPressed: () async {
+          HapticFeedback.mediumImpact();
+          await _saveBudget();
+        },
         style: ElevatedButton.styleFrom(
           backgroundColor: kDeepBlue,
           foregroundColor: Colors.white,

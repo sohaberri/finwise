@@ -3,6 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'custom_nav_bar.dart';
 import 'add_expenses_screen.dart'; 
+import '../services/auth_service.dart';
+import '../services/budget_service.dart';
+import '../services/transaction_service.dart';
 
 class AnalysisScreen extends StatefulWidget {
   const AnalysisScreen({super.key});
@@ -20,6 +23,55 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
   static const kGraphTeal = Color(0xFF0077B6);
 
   String selectedPeriod = 'Daily';
+  List<TransactionEntry> _transactions = [];
+  bool _isLoading = true;
+  double _monthlyIncome = 0.0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadTransactions();
+      _loadBudget();
+    });
+  }
+
+  Future<void> _loadTransactions() async {
+    final auth = AuthScope.of(context);
+    final email = auth.currentUser?.email;
+    if (email == null || email.isEmpty) {
+      setState(() {
+        _transactions = [];
+        _isLoading = false;
+      });
+      return;
+    }
+
+    final list = await TransactionService.instance.loadForUser(email);
+    list.sort((a, b) => b.dateTime.compareTo(a.dateTime));
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _transactions = list;
+      _isLoading = false;
+    });
+  }
+
+  Future<void> _loadBudget() async {
+    final auth = AuthScope.of(context);
+    final email = auth.currentUser?.email;
+    if (email == null || email.isEmpty) {
+      return;
+    }
+    final saved = await BudgetService.instance.loadForUser(email);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _monthlyIncome = saved?.monthlyIncome ?? 0.0;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -128,6 +180,10 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
   }
 
   Widget _buildTopStats() {
+    final totalExpense = _totalExpenses;
+    final totalBalance = _balance;
+    final usagePercent = _monthlyIncome > 0 ? (totalExpense / _monthlyIncome).clamp(0.0, 1.0) : 0.0;
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 10),
       child: Column(
@@ -136,9 +192,9 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _buildMiniStat("Total Balance", "\$7,783.00", Icons.outbox),
+              _buildMiniStat("Total Balance", _formatCurrency(totalBalance, signed: true), Icons.outbox),
               Container(width: 1, height: 40, color: Colors.white30),
-              _buildMiniStat("Total Expense", "-\$1.187.40", Icons.move_to_inbox, isExpense: true),
+              _buildMiniStat("Total Expense", _formatCurrency(totalExpense, signed: true), Icons.move_to_inbox, isExpense: true),
             ],
           ),
           const SizedBox(height: 20),
@@ -154,20 +210,23 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
             child: Stack(
               children: [
                 FractionallySizedBox(
-                  widthFactor: 0.3,
+                  widthFactor: usagePercent,
                   child: Container(
                     decoration: BoxDecoration(
                       color: Colors.black,
                       borderRadius: BorderRadius.circular(15),
                     ),
                     alignment: Alignment.center,
-                    child: const Text("30%", style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                    child: Text(
+                      "${(usagePercent * 100).round()}%",
+                      style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                    ),
                   ),
                 ),
                 Positioned(
                   right: 15,
                   top: 4,
-                  child: Text("\$20,000.00", style: GoogleFonts.poppins(color: kDeepBlue, fontSize: 12, fontWeight: FontWeight.bold, fontStyle: FontStyle.italic)),
+                  child: Text(_formatCurrency(_monthlyIncome), style: GoogleFonts.poppins(color: kDeepBlue, fontSize: 12, fontWeight: FontWeight.bold, fontStyle: FontStyle.italic)),
                 )
               ],
             ),
@@ -179,7 +238,12 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
             children: [
               const Icon(Icons.check_box_outlined, color: Colors.white, size: 18),
               const SizedBox(width: 8),
-              Text("30% Of Your Income has been used!", style: GoogleFonts.poppins(color: Colors.white, fontSize: 13)),
+              Text(
+                _monthlyIncome > 0
+                    ? "${(usagePercent * 100).round()}% Of Your Income has been used!"
+                    : "Set a monthly income to track spending.",
+                style: GoogleFonts.poppins(color: Colors.white, fontSize: 13),
+              ),
             ],
           ),
           const SizedBox(height: 20),
@@ -296,11 +360,13 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
   }
 
   Widget _buildIncomeExpenseRow() {
+    final totalIncome = _totalIncome;
+    final totalExpense = _totalExpenses;
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceAround,
       children: [
-        _buildBottomMiniStat("Income", "\$4,120.00", Icons.outbox, kDeepBlue),
-        _buildBottomMiniStat("Expense", "\$1.187.40", Icons.move_to_inbox, kGraphTeal),
+        _buildBottomMiniStat("Income", _formatCurrency(totalIncome), Icons.outbox, kDeepBlue),
+        _buildBottomMiniStat("Expense", _formatCurrency(totalExpense), Icons.move_to_inbox, kGraphTeal),
       ],
     );
   }
@@ -314,6 +380,21 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
         Text(amount, style: GoogleFonts.poppins(color: color, fontSize: 18, fontWeight: FontWeight.bold)),
       ],
     );
+  }
+
+  double get _totalIncome => _transactions.where((entry) => entry.amount >= 0).fold(0.0, (sum, entry) => sum + entry.amount);
+
+  double get _totalExpenses => _transactions.where((entry) => entry.amount < 0).fold(0.0, (sum, entry) => sum + entry.amount.abs());
+
+  double get _balance => _transactions.fold(0.0, (sum, entry) => sum + entry.amount);
+
+  String _formatCurrency(double amount, {bool signed = false}) {
+    final value = amount.abs().toStringAsFixed(2);
+    if (signed) {
+      final sign = amount < 0 ? '-' : '';
+      return '$sign Rs $value';
+    }
+    return 'Rs $value';
   }
 
   Widget _fadeIn({required Widget child, int delay = 0}) {

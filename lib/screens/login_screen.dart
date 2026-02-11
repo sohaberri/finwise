@@ -8,6 +8,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'forgot_password_screen.dart';
 import 'profile_home_screen.dart';
 import 'dashboard_screen.dart';
+import '../services/auth_service.dart';
 
 
 
@@ -28,6 +29,9 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin {
 
   bool _isObscured = true;
+  final TextEditingController _identifierController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+  String? _errorText;
 
 
 
@@ -44,6 +48,13 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
   static const kPrimaryPurple = Color(0xFF5345C0);
 
   static const kTealAccent = Color(0xFF3EC4BE);
+
+  @override
+  void dispose() {
+    _identifierController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
 
 
 
@@ -163,9 +174,12 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
 
                         children: [
 
-                            _buildLabel("Username Or Email"),
+                            _buildLabel("Email"),
 
-                            _buildGlassTextField(hint: "example@example.com"),
+                            _buildGlassTextField(
+                              hint: "example@example.com",
+                              controller: _identifierController,
+                            ),
 
                             const SizedBox(height: 25),
 
@@ -176,6 +190,8 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                               hint: "••••••••",
 
                               isPassword: true,
+
+                              controller: _passwordController,
 
                               obscureText: _isObscured,
 
@@ -189,6 +205,28 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
 
                             ),
 
+                            if (_errorText != null) ...[
+
+                              const SizedBox(height: 10),
+
+                              Text(
+
+                                _errorText!,
+
+                                style: GoogleFonts.poppins(
+
+                                  color: Colors.redAccent,
+
+                                  fontSize: 12,
+
+                                  fontWeight: FontWeight.w500,
+
+                                ),
+
+                              ),
+
+                            ],
+
                             const SizedBox(height: 30),
 
                             _buildMainButton(
@@ -199,8 +237,72 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
 
                               textColor: Colors.black,
 
-                              onPressed: () {
-                                Navigator.push(context, MaterialPageRoute(builder: (context) => const DashboardScreen()));
+                              onPressed: () async {
+
+                                final auth = AuthScope.of(context);
+
+                                final email = _identifierController.text.trim();
+
+                                final password = _passwordController.text;
+
+
+
+                                if (email.isEmpty || password.isEmpty) {
+
+                                  setState(() {
+
+                                    _errorText = 'Please enter your email and password.';
+
+                                  });
+
+                                  return;
+
+                                }
+
+
+
+                                final isValid = await auth.login(
+
+                                  email: email,
+
+                                  password: password,
+
+                                );
+
+
+
+                                if (!mounted) {
+
+                                  return;
+
+                                }
+
+
+
+                                if (isValid) {
+
+                                  setState(() => _errorText = null);
+
+                                  Navigator.pushAndRemoveUntil(
+
+                                    context,
+
+                                    MaterialPageRoute(builder: (context) => const DashboardScreen()),
+
+                                    (route) => false,
+
+                                  );
+
+                                } else {
+
+                                  setState(() {
+
+                                    _errorText = 'Invalid credentials. Please try again.';
+
+                                  });
+
+                                }
+
                               },
 
                             ),
@@ -406,7 +508,13 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
 
 
 
-  Widget _buildGlassTextField({required String hint, bool isPassword = false, bool obscureText = false, VoidCallback? toggleVisibility}) {
+  Widget _buildGlassTextField({
+    required String hint,
+    bool isPassword = false,
+    bool obscureText = false,
+    VoidCallback? toggleVisibility,
+    TextEditingController? controller,
+  }) {
 
     return AnimatedContainer(
 
@@ -433,6 +541,8 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
             ),
 
             child: TextField(
+
+              controller: controller,
 
               obscureText: obscureText,
 

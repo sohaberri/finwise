@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'custom_nav_bar.dart';
+import 'edit_expense_screen.dart';
+import 'add_expenses_screen.dart';
+import '../services/auth_service.dart';
+import '../services/transaction_service.dart';
 
 class SavingsCategoryScreen extends StatefulWidget {
   const SavingsCategoryScreen({super.key});
@@ -19,6 +23,40 @@ class _SavingsCategoryScreenState extends State<SavingsCategoryScreen> {
   static const kPurpleButton = Color(0xFF393078);
   static const kDeleteRed = Color(0xFFFF8585);
   static const kEditCyan = Color(0xFF44DDFF);
+
+  List<TransactionEntry> _transactions = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadTransactions();
+    });
+  }
+
+  Future<void> _loadTransactions() async {
+    final auth = AuthScope.of(context);
+    final email = auth.currentUser?.email;
+    if (email == null || email.isEmpty) {
+      setState(() {
+        _transactions = [];
+        _isLoading = false;
+      });
+      return;
+    }
+
+    final list = await TransactionService.instance.loadForUser(email);
+    final savingsOnly = list.where((entry) => entry.category == 'Savings').toList();
+    savingsOnly.sort((a, b) => b.dateTime.compareTo(a.dateTime));
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _transactions = savingsOnly;
+      _isLoading = false;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -98,10 +136,10 @@ class _SavingsCategoryScreenState extends State<SavingsCategoryScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildStatLabel(Icons.ads_click, "Goal"),
-            Text("\$1,962.93", style: GoogleFonts.poppins(fontSize: 24, fontWeight: FontWeight.bold, color: kDeepBlue)),
+            Text("Rs 1,962.93", style: GoogleFonts.poppins(fontSize: 24, fontWeight: FontWeight.bold, color: kDeepBlue)),
             const SizedBox(height: 20),
             _buildStatLabel(Icons.outbox_rounded, "Amount Saved"),
-            Text("\$653.31", style: GoogleFonts.poppins(fontSize: 24, fontWeight: FontWeight.bold, color: kTealGreen)),
+            Text("Rs 653.31", style: GoogleFonts.poppins(fontSize: 24, fontWeight: FontWeight.bold, color: kTealGreen)),
           ],
         ),
         _buildCircularProgressIcon(),
@@ -140,36 +178,59 @@ class _SavingsCategoryScreenState extends State<SavingsCategoryScreen> {
 
   // --- TRANSACTION LIST WITH DISMISSIBLE SWIPE ACTIONS ---
   Widget _buildTransactionList() {
+    if (_isLoading) {
+      return const SizedBox(height: 80);
+    }
+    if (_transactions.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: Text("No transactions to show", style: GoogleFonts.poppins(color: Colors.grey)),
+      );
+    }
+
     return Column(
       children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text("April", style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.bold, color: kDeepBlue)),
+            Text("Savings", style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.bold, color: kDeepBlue)),
             const Icon(Icons.calendar_month, color: kDeepBlue),
           ],
         ),
         const SizedBox(height: 20),
-        _buildSwipeableTransaction("Travel Deposit", "19:56 - April 30", "\$217.77"),
-        _buildSwipeableTransaction("Travel Deposit", "17:42 - April 14", "\$217.77"),
-        _buildSwipeableTransaction("Travel Deposit", "12:30 - April 02", "\$217.77"),
+        ..._transactions.map((entry) => _buildSwipeableTransaction(entry)),
       ],
     );
   }
 
-  Widget _buildSwipeableTransaction(String title, String date, String amount) {
+  Widget _buildSwipeableTransaction(TransactionEntry entry) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 15),
+      padding: const EdgeInsets.symmetric(vertical: 8),
       child: Dismissible(
-        key: Key(date),
+        key: Key(entry.id),
         confirmDismiss: (direction) async {
           if (direction == DismissDirection.startToEnd) {
             // Swipe Right -> Trigger Delete
-            _showDeleteDialog(title);
-            return false; // Return false so the item doesn't disappear immediately
-          } else {
-            // Swipe Left -> Trigger Edit
-            // Navigator.push(context, MaterialPageRoute(builder: (context) => const EditScreen()));
+            final confirmed = await _showDeleteDialog(entry.title);
+            if (confirmed != true) {
+              return false;
+            }
+            final auth = AuthScope.of(context);
+            final email = auth.currentUser?.email;
+            if (email == null || email.isEmpty) {
+              return false;
+            }
+            await TransactionService.instance.deleteForUser(email, entry.id);
+            await _loadTransactions();
+            return false;
+          } else if (direction == DismissDirection.endToStart) {
+            final updated = await Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => EditExpenseScreen(entry: entry)),
+            );
+            if (updated == true) {
+              await _loadTransactions();
+            }
             return false;
           }
         },
@@ -186,35 +247,57 @@ class _SavingsCategoryScreenState extends State<SavingsCategoryScreen> {
           alignment: Alignment.centerRight,
         ),
         child: Container(
-          padding: const EdgeInsets.all(15),
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(25),
+            borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.03), 
-                blurRadius: 10, 
-                offset: const Offset(0, 4)
+                color: kDeepBlue.withOpacity(0.04),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
               )
             ],
           ),
           child: Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(color: kCategoryColor.withOpacity(0.2), shape: BoxShape.circle),
-                child: const Icon(Icons.flight_takeoff_rounded, color: kCategoryColor),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(color: kCategoryColor.withOpacity(0.6), shape: BoxShape.circle),
+                child: const Icon(Icons.savings, color: Colors.white, size: 24),
               ),
               const SizedBox(width: 15),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: GoogleFonts.poppins(fontWeight: FontWeight.w700, color: kTextDark)),
-                  Text(date, style: GoogleFonts.poppins(fontSize: 11, color: Colors.grey)),
-                ],
+              Expanded(
+                flex: 3,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(entry.title, style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 14, color: kTextDark)),
+                    Text(formatTransactionDateTime(entry.dateTime), style: GoogleFonts.poppins(fontSize: 10, color: kDeepBlue.withOpacity(0.6), fontWeight: FontWeight.w500)),
+                  ],
+                ),
               ),
-              const Spacer(),
-              Text(amount, style: GoogleFonts.poppins(color: kTealGreen, fontWeight: FontWeight.bold)),
+              Container(
+                height: 30,
+                width: 1,
+                color: Colors.grey.withOpacity(0.3),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 2,
+                child: Text(
+                  'Savings',
+                  style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey.shade600, fontWeight: FontWeight.w500),
+                ),
+              ),
+              Text(
+                formatTransactionAmount(entry.amount),
+                style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 15,
+                  color: entry.amount >= 0 ? kTealGreen : const Color(0xFF3EC5BE),
+                ),
+              ),
             ],
           ),
         ),
@@ -229,15 +312,15 @@ class _SavingsCategoryScreenState extends State<SavingsCategoryScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 25),
       alignment: alignment,
       decoration: BoxDecoration(
-        color: color, 
-        borderRadius: BorderRadius.circular(25)
+        color: color,
+        borderRadius: BorderRadius.circular(20),
       ),
       child: Icon(icon, color: Colors.white, size: 28),
     );
   }
 
-  void _showDeleteDialog(String title) {
-    showDialog(
+  Future<bool?> _showDeleteDialog(String title) {
+    return showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: Colors.white,
@@ -245,8 +328,8 @@ class _SavingsCategoryScreenState extends State<SavingsCategoryScreen> {
         title: Text("Delete Transaction", textAlign: TextAlign.center, style: GoogleFonts.poppins(color: kDeepBlue, fontWeight: FontWeight.bold, fontSize: 18)),
         content: Text("Are you sure you want to delete '$title'?", textAlign: TextAlign.center, style: GoogleFonts.poppins(color: kTextDark.withOpacity(0.7), fontSize: 13)),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: Text("Cancel", style: GoogleFonts.poppins(color: kPurpleButton))),
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Delete", style: TextStyle(color: Colors.redAccent))),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text("Cancel", style: GoogleFonts.poppins(color: kPurpleButton))),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text("Delete", style: TextStyle(color: Colors.redAccent))),
         ],
       ),
     );
@@ -278,7 +361,7 @@ class _SavingsCategoryScreenState extends State<SavingsCategoryScreen> {
         ),
         Positioned(
           right: 15, top: 5,
-          child: Text("\$1,962.93", style: GoogleFonts.poppins(color: Colors.grey, fontSize: 12, fontStyle: FontStyle.italic)),
+          child: Text("Rs 1,962.93", style: GoogleFonts.poppins(color: Colors.grey, fontSize: 12, fontStyle: FontStyle.italic)),
         ),
       ],
     );
@@ -296,7 +379,15 @@ class _SavingsCategoryScreenState extends State<SavingsCategoryScreen> {
 
   Widget _buildAddSavingsButton() {
     return GestureDetector(
-      onTap: () {},
+      onTap: () async {
+        final added = await Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const AddExpensesScreen()),
+        );
+        if (added == true) {
+          await _loadTransactions();
+        }
+      },
       child: Container(
         width: double.infinity, height: 60,
         decoration: BoxDecoration(
