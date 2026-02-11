@@ -6,6 +6,7 @@ class TransactionEntry {
   final String id;
   final String title;
   final String category;
+  final String? savingsGoal;
   final double amount;
   final DateTime dateTime;
   final String? description;
@@ -14,6 +15,7 @@ class TransactionEntry {
     required this.id,
     required this.title,
     required this.category,
+    this.savingsGoal,
     required this.amount,
     required this.dateTime,
     this.description,
@@ -22,6 +24,7 @@ class TransactionEntry {
   TransactionEntry copyWith({
     String? title,
     String? category,
+    String? savingsGoal,
     double? amount,
     DateTime? dateTime,
     String? description,
@@ -30,6 +33,7 @@ class TransactionEntry {
       id: id,
       title: title ?? this.title,
       category: category ?? this.category,
+      savingsGoal: savingsGoal ?? this.savingsGoal,
       amount: amount ?? this.amount,
       dateTime: dateTime ?? this.dateTime,
       description: description ?? this.description,
@@ -41,6 +45,7 @@ class TransactionEntry {
       'id': id,
       'title': title,
       'category': category,
+      'savingsGoal': savingsGoal,
       'amount': amount,
       'dateTime': dateTime.toIso8601String(),
       'description': description,
@@ -52,6 +57,7 @@ class TransactionEntry {
       id: json['id'] as String,
       title: json['title'] as String,
       category: json['category'] as String,
+      savingsGoal: json['savingsGoal'] as String?,
       amount: (json['amount'] as num).toDouble(),
       dateTime: DateTime.parse(json['dateTime'] as String),
       description: json['description'] as String?,

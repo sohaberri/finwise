@@ -30,6 +30,16 @@ class _EditExpenseScreenState extends State<EditExpenseScreen> with TickerProvid
   
   DateTime _selectedDate = DateTime.now();
   late String _selectedCategory;
+  static const List<String> _savingsGoals = [
+    'Travel',
+    'New House',
+    'Car',
+    'Wedding',
+    'Salary',
+    'Others',
+    'More',
+  ];
+  late String _selectedSavingsGoal;
 
   // Voice Animation Logic
   bool isListening = false;
@@ -44,6 +54,7 @@ class _EditExpenseScreenState extends State<EditExpenseScreen> with TickerProvid
     _amountController = TextEditingController(text: widget.entry.amount.abs().toStringAsFixed(2));
     _notesController = TextEditingController(text: widget.entry.description ?? '');
     _selectedCategory = widget.entry.category;
+    _selectedSavingsGoal = widget.entry.savingsGoal ?? _savingsGoals.first;
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1000),
@@ -173,6 +184,10 @@ class _EditExpenseScreenState extends State<EditExpenseScreen> with TickerProvid
                           _buildInputField("Date", "Select date", suffixIcon: Icons.calendar_month, controller: _dateController, readOnly: true, onTap: _selectDate),
                           const SizedBox(height: 25),
                           _buildCategoryDropdown(),
+                          if (_selectedCategory == 'Savings') ...[
+                            const SizedBox(height: 25),
+                            _buildSavingsGoalDropdown(),
+                          ],
                           const SizedBox(height: 25),
                           _buildInputField("Amount", "Rs 0.00", controller: _amountController),
                           const SizedBox(height: 25),
@@ -344,6 +359,45 @@ class _EditExpenseScreenState extends State<EditExpenseScreen> with TickerProvid
                 }
                 setState(() {
                   _selectedCategory = value;
+                  if (_selectedCategory == 'Savings' && _selectedSavingsGoal.isEmpty) {
+                    _selectedSavingsGoal = _savingsGoals.first;
+                  }
+                });
+              },
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSavingsGoalDropdown() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text("Savings Goal", style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600, color: kTextDark.withOpacity(0.8))),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 5),
+          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: _selectedSavingsGoal,
+              isExpanded: true,
+              icon: const Icon(Icons.keyboard_arrow_down_rounded, color: kAccentPurple),
+              style: GoogleFonts.poppins(color: kTextDark, fontSize: 15),
+              items: _savingsGoals
+                  .map((goal) => DropdownMenuItem<String>(
+                        value: goal,
+                        child: Text(goal),
+                      ))
+                  .toList(),
+              onChanged: (value) {
+                if (value == null) {
+                  return;
+                }
+                setState(() {
+                  _selectedSavingsGoal = value;
                 });
               },
             ),
@@ -368,7 +422,7 @@ class _EditExpenseScreenState extends State<EditExpenseScreen> with TickerProvid
       return;
     }
 
-    final cleanedAmount = rawAmount.replaceAll(RegExp(r'(?i)rs'), '').replaceAll('\$', '').trim();
+    final cleanedAmount = rawAmount.replaceAll(RegExp('rs', caseSensitive: false), '').replaceAll('\$', '').trim();
     final parsed = double.tryParse(cleanedAmount);
     if (parsed == null) {
       return;
@@ -386,6 +440,7 @@ class _EditExpenseScreenState extends State<EditExpenseScreen> with TickerProvid
     final updated = widget.entry.copyWith(
       title: title,
       category: _selectedCategory,
+      savingsGoal: _selectedCategory == 'Savings' ? _selectedSavingsGoal : null,
       amount: -parsed.abs(),
       dateTime: dateTime,
       description: notes.isEmpty ? null : notes,

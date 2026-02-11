@@ -301,7 +301,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildSummaryCard() {
     final revenueLastWeek = _revenueLastWeek;
-    final foodLastWeek = _foodLastWeek;
+    final expensesLastWeek = _expensesLastWeek;
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(color: kDarkCard, borderRadius: BorderRadius.circular(35)),
@@ -314,7 +314,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               children: [
                 _buildSmallStat("Revenue Last Week", _formatCurrency(revenueLastWeek)),
                 const Divider(color: Colors.white24),
-                _buildSmallStat("Food Last Week", _formatCurrency(foodLastWeek, signed: true), isNegative: true),
+                _buildSmallStat("Expenses Last Week", _formatCurrency(expensesLastWeek, signed: true), isNegative: true),
               ],
             ),
           )
@@ -552,10 +552,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
         .fold(0.0, (sum, entry) => sum + entry.amount);
   }
 
-  double get _foodLastWeek {
+  double get _expensesLastWeek {
     final cutoff = DateTime.now().subtract(const Duration(days: 7));
     return _transactions
-        .where((entry) => entry.amount < 0 && entry.category == 'Food' && entry.dateTime.isAfter(cutoff))
+        .where((entry) => entry.amount < 0 && entry.dateTime.isAfter(cutoff))
         .fold(0.0, (sum, entry) => sum + entry.amount.abs());
   }
 
