@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import 'add_faceid_screen.dart';
+import 'login_screen.dart';
 
 class ActivationScreen extends StatefulWidget {
   const ActivationScreen({super.key});
@@ -144,7 +144,7 @@ class _ActivationScreenState extends State<ActivationScreen> {
                                   ? () {
                                       Navigator.push(
                                         context,
-                                        MaterialPageRoute(builder: (_) => const AddFaceidScreen()),
+                                        MaterialPageRoute(builder: (_) => const LoginScreen()),
                                       );
                                     }
                                   : null,

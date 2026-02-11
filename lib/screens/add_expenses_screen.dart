@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'custom_nav_bar.dart';
 import 'ocr_screen.dart';
+import 'completion_screen.dart';
 import '../services/auth_service.dart';
 import '../services/transaction_service.dart';
 import '../services/category_service.dart';
@@ -454,7 +455,12 @@ class _AddExpensesScreenState extends State<AddExpensesScreen> with TickerProvid
       return;
     }
 
-    Navigator.pop(context, true);
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const SuccessScreen()),
+    ).then((_) {
+      Navigator.pop(context, true);
+    });
   }
 
   Widget _buildAppBar() {

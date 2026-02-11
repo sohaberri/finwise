@@ -4,7 +4,9 @@ import 'package:google_fonts/google_fonts.dart';
 import 'login_screen.dart'; // Ensure this matches your login file name
 
 class SuccessScreen extends StatefulWidget {
-  const SuccessScreen({super.key});
+  final bool autoClose;
+  
+  const SuccessScreen({super.key, this.autoClose = true});
 
   @override
   State<SuccessScreen> createState() => _SuccessScreenState();
@@ -16,16 +18,32 @@ class _SuccessScreenState extends State<SuccessScreen> with TickerProviderStateM
   static const kTealGreen = Color(0xFF00D09E);
 
   @override
+  void initState() {
+    super.initState();
+    if (widget.autoClose) {
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted) {
+          Navigator.pop(context);
+        }
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: GestureDetector(
         onTap: () {
-          // Navigates back to login and clears the navigation stack
-          Navigator.pushAndRemoveUntil(
-            context,
-            MaterialPageRoute(builder: (context) => const LoginScreen()),
-            (route) => false,
-          );
+          if (widget.autoClose) {
+            Navigator.pop(context);
+          } else {
+            // Navigates back to login and clears the navigation stack
+            Navigator.pushAndRemoveUntil(
+              context,
+              MaterialPageRoute(builder: (context) => const LoginScreen()),
+              (route) => false,
+            );
+          }
         },
         child: Stack(
           clipBehavior: Clip.none, // Allows bubbles to hang off the edge
@@ -61,7 +79,7 @@ class _SuccessScreenState extends State<SuccessScreen> with TickerProviderStateM
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 40),
                       child: Text(
-                        "Password Has Been\nChanged Successfully",
+                        "Completed",
                         textAlign: TextAlign.center,
                         style: GoogleFonts.poppins(
                           fontSize: 22,

@@ -84,12 +84,6 @@ class _SecurityScreenState extends State<SecurityScreen> {
                             Text("Security", style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.bold, color: kTextDark)),
                             const SizedBox(height: 30),
                             
-                            _buildSecurityOption("Change Pin", onTap: () {
-                              Navigator.push(context, MaterialPageRoute(builder: (context) => const ChangePinScreen()));
-                            }),
-                            _buildSecurityOption("Fingerprint", onTap: () {
-                              Navigator.push(context, MaterialPageRoute(builder: (context) => const FingerprintScreen()));
-                            }),
                             _buildSecurityOption("Face ID", onTap: () {
                               Navigator.push(context, MaterialPageRoute(builder: (context) => const FaceIDScreen()));
                             }),

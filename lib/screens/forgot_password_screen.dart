@@ -4,7 +4,6 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'security_pin_screen.dart';
 import 'signup_screen.dart';
-import 'security_fingerprint_screen.dart';
 import 'security_face_id_screen.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
@@ -107,28 +106,15 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> with Ticker
                             
                             const SizedBox(height: 60),
 
-                            // NEW BIOMETRIC SECTION
+                            // BIOMETRIC SECTION
                             Center(
-                              child: Column(
-                                children: [
-                                  _biometricLink(
-                                    text: "Or use fingerprint?", 
-                                    icon: Icons.fingerprint,
-                                    onTap: () {
-                                      HapticFeedback.mediumImpact();
-                                      Navigator.push(context, MaterialPageRoute(builder: (context) => const SecurityFingerprintScreen()));
-                                    }
-                                  ),
-                                  const SizedBox(height: 20),
-                                  _biometricLink(
-                                    text: "Or use face id?", 
-                                    icon: Icons.face,
-                                    onTap: () {
-                                      HapticFeedback.mediumImpact();
-                                      Navigator.push(context, MaterialPageRoute(builder: (context) => const SecurityFaceIDScreen()));
-                                    }
-                                  ),
-                                ],
+                              child: _biometricLink(
+                                text: "Or use face id?", 
+                                icon: Icons.face,
+                                onTap: () {
+                                  HapticFeedback.mediumImpact();
+                                  Navigator.push(context, MaterialPageRoute(builder: (context) => const SecurityFaceIDScreen()));
+                                }
                               ),
                             ),
 

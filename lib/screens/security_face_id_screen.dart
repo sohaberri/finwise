@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'forgot_password_screen.dart';
-import 'security_fingerprint_screen.dart';
 
 class SecurityFaceIDScreen extends StatefulWidget {
   const SecurityFaceIDScreen({super.key});
@@ -122,14 +121,6 @@ class _SecurityFaceIDScreenState extends State<SecurityFaceIDScreen> with Ticker
                               icon: Icons.dialpad_rounded,
                               onTap: () {
                                 Navigator.push(context, MaterialPageRoute(builder: (context) => const ForgotPasswordScreen()));
-                              }
-                            ),
-                            const SizedBox(height: 15),
-                            _biometricLink(
-                              text: "Or use fingerprint?", 
-                              icon: Icons.fingerprint_rounded,
-                              onTap: () {
-                                Navigator.push(context, MaterialPageRoute(builder: (context) => const SecurityFingerprintScreen()));
                               }
                             ),
                         ],

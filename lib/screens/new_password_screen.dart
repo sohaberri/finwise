@@ -112,7 +112,7 @@ class _NewPasswordScreenState extends State<NewPasswordScreen> with TickerProvid
                               color: Colors.white,
                               textColor: kLabelColor,
                               onPressed: () {
-                                Navigator.push(context, MaterialPageRoute(builder: (context) => const SuccessScreen()));
+                                Navigator.push(context, MaterialPageRoute(builder: (context) => const SuccessScreen(autoClose: false)));
                               },
                             ),
                         ],

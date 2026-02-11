@@ -138,7 +138,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             const SizedBox(height: 20),
                             if (_isLoading)
                               const SizedBox(height: 80)
-                            else if (_transactions.isEmpty)
+                            else if (_filteredTransactions.isEmpty)
                               Padding(
                                 padding: const EdgeInsets.symmetric(vertical: 20),
                                 child: Text(
@@ -147,7 +147,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 ),
                               )
                             else
-                              ..._transactions.map((entry) => _buildTransactionItem(
+                              ..._filteredTransactions.map((entry) => _buildTransactionItem(
                                     _iconForCategory(entry.category),
                                     entry.title,
                                     formatTransactionDateTime(entry.dateTime),
@@ -557,6 +557,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return _transactions
         .where((entry) => entry.amount < 0 && entry.dateTime.isAfter(cutoff))
         .fold(0.0, (sum, entry) => sum + entry.amount.abs());
+  }
+
+  List<TransactionEntry> get _filteredTransactions {
+    final now = DateTime.now();
+    if (selectedPeriod == 'Daily') {
+      final startOfDay = DateTime(now.year, now.month, now.day);
+      return _transactions.where((entry) => entry.dateTime.isAfter(startOfDay)).toList();
+    } else if (selectedPeriod == 'Weekly') {
+      final cutoff = now.subtract(const Duration(days: 7));
+      return _transactions.where((entry) => entry.dateTime.isAfter(cutoff)).toList();
+    } else {
+      // Monthly
+      final cutoff = now.subtract(const Duration(days: 30));
+      return _transactions.where((entry) => entry.dateTime.isAfter(cutoff)).toList();
+    }
   }
 
   String _formatCurrency(double amount, {bool signed = false}) {

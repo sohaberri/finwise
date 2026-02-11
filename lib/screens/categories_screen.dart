@@ -124,12 +124,15 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
               icon: Icons.edit_rounded,
               color: const Color.fromARGB(255, 68, 221, 255),
               label: "Edit Category",
-              onTap: () {
+              onTap: () async {
                 Navigator.pop(context);
-                Navigator.push(
+                final updated = await Navigator.push(
                   context,
                   MaterialPageRoute(builder: (context) => EditCategoryScreen(categoryEntry: category)),
                 );
+                if (updated == true) {
+                  _loadCategories();
+                }
               },
             ),
             const SizedBox(height: 15),
@@ -149,7 +152,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
     );
   }
 
-  Widget _buildOptionTile({required IconData icon, required Color color, required String label, required VoidCallback onTap}) {
+  Widget _buildOptionTile({required IconData icon, required Color color, required String label, required Function() onTap}) {
     return InkWell(
       onTap: onTap,
       child: Container(
