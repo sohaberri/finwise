@@ -1,6 +1,6 @@
 import 'dart:convert';
-
 import 'package:shared_preferences/shared_preferences.dart';
+import 'api_service.dart';
 
 class TransactionEntry {
   final String id;
@@ -92,14 +92,98 @@ class TransactionService {
     'Entertainment': 'confirmation_number',
   };
 
+  late ApiService _apiService;
   SharedPreferences? _prefs;
 
   Future<void> init() async {
     _prefs ??= await SharedPreferences.getInstance();
+    _apiService = ApiService();
   }
 
+  /// Load transactions for user
+  /// Uses local storage as fallback if backend is unavailable
   Future<List<TransactionEntry>> loadForUser(String email) async {
     await init();
+    try {
+      // TODO: Replace with backend call when available
+      // const url = '/api/transactions/list/';
+      // final response = await _apiService.get(url);
+      // final data = jsonDecode(response.body);
+      // final transactions = (data['transactions'] as List)
+      //     .map((item) => TransactionEntry.fromJson(item as Map<String, dynamic>))
+      //     .toList();
+      // 
+      // // Cache locally
+      // await _cacheTransactionsLocally(email, transactions);
+      // return transactions;
+
+      // Fallback to local storage
+      return _loadFromLocalStorage(email);
+    } catch (e) {
+      return _loadFromLocalStorage(email);
+    }
+  }
+
+  /// Add a new transaction
+  Future<void> addForUser(String email, TransactionEntry entry) async {
+    // TODO: Replace with backend call when available
+    // const url = '/api/transactions/add/';
+    // final response = await _apiService.post(url, {
+    //   'title': entry.title,
+    //   'category': entry.category,
+    //   'savingsGoal': entry.savingsGoal,
+    //   'amount': entry.amount,
+    //   'dateTime': entry.dateTime.toIso8601String(),
+    //   'description': entry.description,
+    // });
+    // 
+    // final data = jsonDecode(response.body);
+    // // Update local cache with server response
+    // _saveToLocalStorage(email, [...await _loadFromLocalStorage(email), entry]);
+
+    // Fallback: save to local storage
+    final list = await _loadFromLocalStorage(email);
+    list.add(entry);
+    await _saveToLocalStorage(email, list);
+  }
+
+  /// Update an existing transaction
+  Future<void> updateForUser(String email, TransactionEntry entry) async {
+    // TODO: Replace with backend call when available
+    // final url = '/api/transactions/${entry.id}/';
+    // final response = await _apiService.put(url, {
+    //   'title': entry.title,
+    //   'category': entry.category,
+    //   'savingsGoal': entry.savingsGoal,
+    //   'amount': entry.amount,
+    //   'dateTime': entry.dateTime.toIso8601String(),
+    //   'description': entry.description,
+    // });
+
+    // Fallback: update local storage
+    final list = await _loadFromLocalStorage(email);
+    final index = list.indexWhere((item) => item.id == entry.id);
+    if (index == -1) {
+      return;
+    }
+    list[index] = entry;
+    await _saveToLocalStorage(email, list);
+  }
+
+  /// Delete a transaction
+  Future<void> deleteForUser(String email, String id) async {
+    // TODO: Replace with backend call when available
+    // final url = '/api/transactions/$id/';
+    // await _apiService.delete(url);
+
+    // Fallback: delete from local storage
+    final list = await _loadFromLocalStorage(email);
+    list.removeWhere((item) => item.id == id);
+    await _saveToLocalStorage(email, list);
+  }
+
+  /// Load transactions from local storage
+  Future<List<TransactionEntry>> _loadFromLocalStorage(String email) async {
     final raw = _prefs?.getString(_storageKey(email));
     if (raw == null || raw.isEmpty) {
       return [];
@@ -111,35 +195,15 @@ class TransactionService {
         .toList();
   }
 
-  Future<void> addForUser(String email, TransactionEntry entry) async {
-    // TODO: Replace with backend write for creating a transaction.
-    final list = await loadForUser(email);
-    list.add(entry);
-    await _saveForUser(email, list);
-  }
-
-  Future<void> updateForUser(String email, TransactionEntry entry) async {
-    // TODO: Replace with backend write for updating a transaction.
-    final list = await loadForUser(email);
-    final index = list.indexWhere((item) => item.id == entry.id);
-    if (index == -1) {
-      return;
-    }
-    list[index] = entry;
-    await _saveForUser(email, list);
-  }
-
-  Future<void> deleteForUser(String email, String id) async {
-    // TODO: Replace with backend write for deleting a transaction.
-    final list = await loadForUser(email);
-    list.removeWhere((item) => item.id == id);
-    await _saveForUser(email, list);
-  }
-
-  Future<void> _saveForUser(String email, List<TransactionEntry> list) async {
-    await init();
+  /// Save transactions to local storage
+  Future<void> _saveToLocalStorage(String email, List<TransactionEntry> list) async {
     final encoded = jsonEncode(list.map((item) => item.toJson()).toList());
     await _prefs?.setString(_storageKey(email), encoded);
+  }
+
+  /// Cache transactions locally for offline access
+  Future<void> _cacheTransactionsLocally(String email, List<TransactionEntry> transactions) async {
+    await _saveToLocalStorage(email, transactions);
   }
 
   String _storageKey(String email) => 'transactions.$email';
