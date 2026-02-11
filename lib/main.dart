@@ -4,11 +4,11 @@ import 'screens/login_screen.dart';
 import 'screens/signup_screen.dart';
 
 void main() {
-  runApp(const FigmaToCodeApp());
+  runApp(const Finwise());
 }
 
-class FigmaToCodeApp extends StatelessWidget {
-  const FigmaToCodeApp({super.key});
+class Finwise extends StatelessWidget {
+  const Finwise({super.key});
 
   @override
   Widget build(BuildContext context) {

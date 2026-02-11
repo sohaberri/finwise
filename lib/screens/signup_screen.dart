@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'activation_screen.dart';
+
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
 
@@ -14,21 +16,50 @@ class _SignUpScreenState extends State<SignUpScreen> with TickerProviderStateMix
   bool _isObscured = true;
   bool _isConfirmObscured = true;
 
-  // Matching Your Exact Color Palette
+  // Controllers for validation
+  final TextEditingController _passController = TextEditingController();
+
+  // Validation States
+  bool hasUppercase = false;
+  bool hasDigits = false;
+  bool hasSpecialCharacters = false;
+  bool hasMinLength = false;
+
   static const kDeepBlue = Color(0xFF191A4C);
   static const kTealGreen = Color(0xFF00D09E);
   static const kFormBg = Color(0xFFF3F2FF);
   static const kInputBg = Color(0xFF53558A);
-  static const kPrimaryPurple = Color(0xFF5345C0);
   static const kTealAccent = Color(0xFF3EC4BE);
   static const kLabelColor = Color(0xFF093030);
+
+  @override
+  void initState() {
+    super.initState();
+    // Listen to password changes
+    _passController.addListener(_validatePassword);
+  }
+
+  void _validatePassword() {
+    final password = _passController.text;
+    setState(() {
+      hasUppercase = password.contains(RegExp(r'[A-Z]'));
+      hasDigits = password.contains(RegExp(r'[0-9]'));
+      hasSpecialCharacters = password.contains(RegExp(r'[!@#$%^&*(),.?":{}|<>]'));
+      hasMinLength = password.length >= 8;
+    });
+  }
+
+  @override
+  void dispose() {
+    _passController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Stack(
         children: [
-          // 1. BASE GRADIENT (Identical to Login)
           Container(
             decoration: const BoxDecoration(
               gradient: LinearGradient(
@@ -38,14 +69,10 @@ class _SignUpScreenState extends State<SignUpScreen> with TickerProviderStateMix
               ),
             ),
           ),
-
-          // 2. THE BUBBLES (Identical to Login)
           _buildAnimatedBubble(left: -329, top: -446, size: 700, 
               colors: [const Color(0xFF191A4C), const Color(0xFF2A2B7F), const Color(0xFF3A3CB2)]),
           _buildAnimatedBubble(left: -225, top: -342, size: 492, 
               colors: [const Color(0xFF9599D3), const Color(0xFF6C71B3), const Color(0xFF444993)]),
-
-          // 3. MAIN CONTENT
           SafeArea(
             bottom: false,
             child: Column(
@@ -53,37 +80,24 @@ class _SignUpScreenState extends State<SignUpScreen> with TickerProviderStateMix
                 const SizedBox(height: 20),
                 _fadeIn(
                   delay: 0,
-                  child: Text(
-                    'Create Account',
-                    style: GoogleFonts.poppins(
-                      fontSize: 32,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
-                      letterSpacing: 1.2,
-                    ),
+                  child: Text('Create Account',
+                    style: GoogleFonts.poppins(fontSize: 32, fontWeight: FontWeight.w600, color: Colors.white, letterSpacing: 1.2),
                   ),
                 ),
                 const SizedBox(height: 30),
-                
                 Expanded(
-                  child: _fadeIn(
-                    delay: 200,
-                    slideOffset: 100,
-                    child: Container(
-                      width: double.infinity,
-                      decoration: const BoxDecoration(
-                        color: kFormBg,
-                        borderRadius: BorderRadius.only(
-                          topLeft: Radius.circular(70),
-                          topRight: Radius.circular(70),
-                        ),
-                      ),
-                      child: SingleChildScrollView(
-                        physics: const BouncingScrollPhysics(),
-                        padding: const EdgeInsets.symmetric(horizontal: 35, vertical: 40),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
+                  child: Container(
+                    width: double.infinity,
+                    decoration: const BoxDecoration(
+                      color: kFormBg,
+                      borderRadius: BorderRadius.only(topLeft: Radius.circular(70), topRight: Radius.circular(70)),
+                    ),
+                    child: SingleChildScrollView(
+                      physics: const BouncingScrollPhysics(),
+                      padding: const EdgeInsets.symmetric(horizontal: 35, vertical: 40),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
                             _buildLabel("Full Name"),
                             _buildGlassTextField(hint: "John Doe"),
                             const SizedBox(height: 20),
@@ -92,25 +106,26 @@ class _SignUpScreenState extends State<SignUpScreen> with TickerProviderStateMix
                             _buildGlassTextField(hint: "example@example.com"),
                             const SizedBox(height: 20),
 
-                            _buildLabel("Mobile Number"),
-                            _buildGlassTextField(hint: "+ 123 456 789"),
-                            const SizedBox(height: 20),
-
-                            _buildLabel("Date Of Birth"),
-                            _buildGlassTextField(hint: "DD / MM / YYYY"),
-                            const SizedBox(height: 20),
-
                             _buildLabel("Password"),
                             _buildGlassTextField(
                               hint: "••••••••",
                               isPassword: true,
+                              controller: _passController, // Attached controller
                               obscureText: _isObscured,
                               toggleVisibility: () {
                                 HapticFeedback.selectionClick();
                                 setState(() => _isObscured = !_isObscured);
                               },
                             ),
-                            const SizedBox(height: 20),
+                            
+                            // --- PASSWORD VALIDATION RULES ---
+                            const SizedBox(height: 12),
+                            _buildValidationRow("Minimum 8 characters", hasMinLength),
+                            _buildValidationRow("At least 1 uppercase letter", hasUppercase),
+                            _buildValidationRow("At least 1 number", hasDigits),
+                            _buildValidationRow("At least 1 special symbol", hasSpecialCharacters),
+                            
+                            const SizedBox(height: 25),
 
                             _buildLabel("Confirm Password"),
                             _buildGlassTextField(
@@ -124,28 +139,16 @@ class _SignUpScreenState extends State<SignUpScreen> with TickerProviderStateMix
                             ),
                             const SizedBox(height: 30),
 
-                            // Terms and Privacy Text
-                            Center(
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 10),
-                                child: Text(
-                                  "By continuing, you agree to\nTerms of Use and Privacy Policy.",
-                                  textAlign: TextAlign.center,
-                                  style: GoogleFonts.poppins(
-                                    color: kTealAccent,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 20),
-
                             _buildMainButton(
                               text: "Sign Up",
                               color: Colors.white,
                               textColor: kDeepBlue,
-                              onPressed: () {},
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (_) => const ActivationScreen()),
+                                );
+                              },
                             ),
 
                             const SizedBox(height: 20),
@@ -154,27 +157,17 @@ class _SignUpScreenState extends State<SignUpScreen> with TickerProviderStateMix
                                 onTap: () => Navigator.pop(context),
                                 child: RichText(
                                   text: TextSpan(
-                                    style: GoogleFonts.leagueSpartan(
-                                      color: kLabelColor,
-                                      fontSize: 14,
-                                    ),
+                                    style: GoogleFonts.leagueSpartan(color: kLabelColor, fontSize: 14),
                                     children: const [
                                       TextSpan(text: "Already have an account? "),
-                                      TextSpan(
-                                        text: "Log In",
-                                        style: TextStyle(
-                                          color: kTealAccent,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
+                                      TextSpan(text: "Log In", style: TextStyle(color: kTealAccent, fontWeight: FontWeight.bold)),
                                     ],
                                   ),
                                 ),
                               ),
                             ),
                             const SizedBox(height: 20),
-                          ],
-                        ),
+                        ],
                       ),
                     ),
                   ),
@@ -187,51 +180,38 @@ class _SignUpScreenState extends State<SignUpScreen> with TickerProviderStateMix
     );
   }
 
-  // --- REUSABLE WIDGETS (Slightly adjusted for spacing) ---
-
-  Widget _fadeIn({required Widget child, int delay = 0, double slideOffset = 30}) {
-    return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0.0, end: 1.0),
-      duration: const Duration(milliseconds: 800),
-      curve: Curves.easeOutQuart,
-      builder: (context, value, child) {
-        return Opacity(
-          opacity: value,
-          child: Transform.translate(
-            offset: Offset(0, slideOffset * (1 - value)),
-            child: child,
+  // Helper Widget for validation indicators
+  Widget _buildValidationRow(String text, bool isValid) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4, left: 15),
+      child: Row(
+        children: [
+          Icon(
+            isValid ? Icons.check_circle : Icons.circle,
+            size: 14,
+            color: isValid ? kTealGreen : Colors.grey.withOpacity(0.5),
           ),
-        );
-      },
-      child: child,
-    );
-  }
-
-  Widget _buildAnimatedBubble({required double left, required double top, required double size, required List<Color> colors}) {
-    return Positioned(
-      left: left,
-      top: top,
-      child: TweenAnimationBuilder<double>(
-        tween: Tween(begin: 0.8, end: 1.0),
-        duration: const Duration(seconds: 2),
-        curve: Curves.elasticOut,
-        builder: (context, value, child) => Transform.scale(scale: value, child: child),
-        child: Opacity(
-          opacity: 0.50,
-          child: Container(
-            width: size,
-            height: size,
-            decoration: ShapeDecoration(
-              gradient: LinearGradient(colors: colors),
-              shape: const OvalBorder(),
+          const SizedBox(width: 8),
+          Text(
+            text,
+            style: GoogleFonts.poppins(
+              fontSize: 12,
+              color: isValid ? kTealGreen : Colors.grey,
+              fontWeight: isValid ? FontWeight.w600 : FontWeight.w400,
             ),
           ),
-        ),
+        ],
       ),
     );
   }
 
-  Widget _buildGlassTextField({required String hint, bool isPassword = false, bool obscureText = false, VoidCallback? toggleVisibility}) {
+  Widget _buildGlassTextField({
+    required String hint, 
+    bool isPassword = false, 
+    bool obscureText = false, 
+    VoidCallback? toggleVisibility,
+    TextEditingController? controller,
+  }) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(20),
       child: BackdropFilter(
@@ -243,6 +223,7 @@ class _SignUpScreenState extends State<SignUpScreen> with TickerProviderStateMix
             border: Border.all(color: Colors.white.withOpacity(0.1)),
           ),
           child: TextField(
+            controller: controller,
             obscureText: obscureText,
             cursorColor: kTealAccent,
             style: const TextStyle(color: Colors.white),
@@ -262,23 +243,19 @@ class _SignUpScreenState extends State<SignUpScreen> with TickerProviderStateMix
     );
   }
 
+  // --- REST OF YOUR UI WIDGETS ---
+  Widget _buildLabel(String text) => Padding(
+    padding: const EdgeInsets.only(left: 15, bottom: 8),
+    child: Text(text, style: GoogleFonts.poppins(color: kLabelColor, fontSize: 14, fontWeight: FontWeight.w500)),
+  );
+
   Widget _buildMainButton({required String text, required Color color, required Color textColor, required VoidCallback onPressed}) {
-    return Container(
-      height: 55,
-      width: double.infinity,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(30),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4))],
-      ),
+    return SizedBox(
+      height: 55, width: double.infinity,
       child: ElevatedButton(
-        onPressed: () {
-          HapticFeedback.lightImpact();
-          onPressed();
-        },
+        onPressed: onPressed,
         style: ElevatedButton.styleFrom(
-          backgroundColor: color,
-          foregroundColor: textColor,
-          elevation: 0,
+          backgroundColor: color, foregroundColor: textColor,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
         ),
         child: Text(text, style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w600)),
@@ -286,10 +263,16 @@ class _SignUpScreenState extends State<SignUpScreen> with TickerProviderStateMix
     );
   }
 
-  Widget _buildLabel(String text) {
-    return Padding(
-      padding: const EdgeInsets.only(left: 15, bottom: 8),
-      child: Text(text, style: GoogleFonts.poppins(color: kLabelColor, fontSize: 14, fontWeight: FontWeight.w500)),
+  Widget _fadeIn({required Widget child, int delay = 0, double slideOffset = 30}) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.0, end: 1.0),
+      duration: const Duration(milliseconds: 800),
+      builder: (context, value, child) => Opacity(opacity: value, child: Transform.translate(offset: Offset(0, slideOffset * (1 - value)), child: child)),
+      child: child,
     );
+  }
+
+  Widget _buildAnimatedBubble({required double left, required double top, required double size, required List<Color> colors}) {
+    return Positioned(left: left, top: top, child: Opacity(opacity: 0.50, child: Container(width: size, height: size, decoration: ShapeDecoration(gradient: LinearGradient(colors: colors), shape: const OvalBorder()))));
   }
 }

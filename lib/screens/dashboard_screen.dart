@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'custom_nav_bar.dart';
 import 'profile_home_screen.dart';
+import 'add_expenses_Screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -15,11 +16,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
   static const kDeepBlue = Color(0xFF191A4C);
   static const kTealGreen = Color(0xFF00D09E);
   static const kFormBg = Color(0xFFF3F2FF);
-  static const kTextDark = Color(0xFF093030);
+  static const kTextDark = Color(0xFF052224);
   static const kAccentPurple = Color(0xFF5E5F92);
-  static const kDarkCard = Color(0xFF16194F);
+  static const kDarkCard = Color(0xFF191A4C);
 
-  String selectedPeriod = 'Monthly'; // State for the toggle bar
+  String selectedPeriod = 'Monthly'; 
 
   @override
   Widget build(BuildContext context) {
@@ -31,14 +32,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
           if (index == 4) {
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (context) => ProfileHomeScreen()),
+              MaterialPageRoute(builder: (context) => const ProfileHomeScreen()),
             );
           }
         },
       ),
       body: Stack(
         children: [
-          // 1. BASE GRADIENT
           Container(
             decoration: const BoxDecoration(
               gradient: LinearGradient(
@@ -49,11 +49,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ),
 
-          // 2. BACKGROUND BUBBLES (Elastic scale animation)
           _buildAnimatedBubble(left: -329, top: -446, size: 700, colors: [const Color(0xFF191A4C), const Color(0xFF2A2B7F), const Color(0xFF3A3CB2)]),
           _buildAnimatedBubble(left: -225, top: -342, size: 492, colors: [const Color(0xFF9599D3), const Color(0xFF6C71B3), const Color(0xFF444993)]),
 
-          // 3. MAIN CONTENT
           SafeArea(
             bottom: false,
             child: Column(
@@ -85,11 +83,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             const SizedBox(height: 25),
                             _buildPeriodToggle(),
                             const SizedBox(height: 20),
-                            // VERTICALLY SCROLLABLE TRANSACTIONS
-                            _buildTransactionItem(Icons.payments, "Salary", "18:27 - April 30", "Monthly", "\$4.000,00", Colors.tealAccent.shade400, isPositive: true),
-                            _buildTransactionItem(Icons.shopping_bag, "Groceries", "17:00 - April 24", "Pantry", "-\$100,00", Colors.tealAccent.shade400),
-                            _buildTransactionItem(Icons.vpn_key, "Rent", "8:30 - April 15", "Rent", "-\$674,40", Colors.blueAccent),
-                            const SizedBox(height: 100), // Space for nav bar
+                            _buildTransactionItem(Icons.payments, "Salary", "18:27 - April 30", "Monthly", "\$4.000,00", const Color(0xFF81C9CC), isPositive: true),
+                            _buildTransactionItem(Icons.shopping_bag, "Groceries", "17:00 - April 24", "Pantry", "-\$100,00", const Color(0xFF3EC5BE)),
+                            _buildTransactionItem(Icons.vpn_key, "Rent", "8:30 - April 15", "Rent", "-\$674,40", const Color(0xFF0F78A2)),
+                            const SizedBox(height: 100), 
                           ],
                         ),
                       ),
@@ -136,8 +133,52 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ],
           ),
           const SizedBox(height: 20),
+
+          // --- ADDED PROGRESS BAR ---
+          Container(
+            height: 25,
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(15),
+            ),
+            child: Stack(
+              children: [
+                FractionallySizedBox(
+                  widthFactor: 0.3, // 30% progress
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.black,
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                    alignment: Alignment.center,
+                    child: const Text("30%", style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+                Positioned(
+                  right: 15,
+                  top: 4,
+                  child: Text("\$20,000.00", style: GoogleFonts.poppins(color: kDeepBlue, fontSize: 12, fontWeight: FontWeight.bold, fontStyle: FontStyle.italic)),
+                )
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          // --- ADDED INSIGHT TEXT ---
+          Row(
+            children: [
+              const Icon(Icons.check_box_outlined, color: Colors.white, size: 18),
+              const SizedBox(width: 8),
+              Text("30% Of Your Income has been used!", style: GoogleFonts.poppins(color: Colors.white, fontSize: 13)),
+            ],
+          ),
+          const SizedBox(height: 20),
+
           ElevatedButton(
-            onPressed: () {},
+            onPressed: () {
+              Navigator.push(context, MaterialPageRoute(builder: (context) => const AddExpensesScreen()));
+            },
             style: ElevatedButton.styleFrom(
               backgroundColor: kAccentPurple,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -172,7 +213,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: Row(
         children: [
           _buildGoalCircle(),
-          const VerticalDivider(color: Colors.white24, thickness: 1, indent: 10, endIndent: 10),
+          const SizedBox(width: 15),
           Expanded(
             child: Column(
               children: [
@@ -190,7 +231,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _buildPeriodToggle() {
     return Container(
       height: 60,
-      decoration: BoxDecoration(color: const Color(0xFFD1D1EB), borderRadius: BorderRadius.circular(30)),
+      decoration: BoxDecoration(color: const Color(0xFF53558A), borderRadius: BorderRadius.circular(30)),
       child: Row(
         children: ['Daily', 'Weekly', 'Monthly'].map((period) {
           bool isSelected = selectedPeriod == period;
@@ -203,7 +244,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               child: Container(
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: isSelected ? kDarkCard : Colors.transparent,
+                  color: isSelected ? const Color(0xFF2F206C) : Colors.transparent,
                   borderRadius: BorderRadius.circular(30),
                 ),
                 child: Text(
@@ -243,7 +284,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // Consistent UI helper components...
   Widget _buildGoalCircle() { return Container(width: 80, height: 80, decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.cyanAccent, width: 3)), child: const Center(child: Icon(Icons.directions_car, color: Colors.white, size: 35))); }
   Widget _buildSmallStat(String label, String val, {bool isNegative = false}) { return Column(children: [Text(label, style: GoogleFonts.poppins(color: Colors.white70, fontSize: 11)), Text(val, style: GoogleFonts.poppins(color: isNegative ? Colors.cyanAccent : Colors.white, fontWeight: FontWeight.bold))]); }
   

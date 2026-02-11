@@ -65,23 +65,20 @@ class _SecurityPinScreenState extends State<SecurityPinScreen> with TickerProvid
                 const SizedBox(height: 50),
                 
                 Expanded(
-                  child: _fadeIn(
-                    delay: 200,
-                    slideOffset: 100,
-                    child: Container(
-                      width: double.infinity,
-                      decoration: const BoxDecoration(
-                        color: kFormBg,
-                        borderRadius: BorderRadius.only(
-                          topLeft: Radius.circular(70),
-                          topRight: Radius.circular(70),
-                        ),
+                  child: Container(
+                    width: double.infinity,
+                    decoration: const BoxDecoration(
+                      color: kFormBg,
+                      borderRadius: BorderRadius.only(
+                        topLeft: Radius.circular(70),
+                        topRight: Radius.circular(70),
                       ),
-                      child: SingleChildScrollView(
-                        physics: const BouncingScrollPhysics(),
-                        padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 60),
-                        child: Column(
-                          children: [
+                    ),
+                    child: SingleChildScrollView(
+                      physics: const BouncingScrollPhysics(),
+                      padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 60),
+                      child: Column(
+                        children: [
                             Text(
                               "Enter Security Pin",
                               style: GoogleFonts.poppins(
@@ -164,8 +161,7 @@ class _SecurityPinScreenState extends State<SecurityPinScreen> with TickerProvid
                                 ),
                               ),
                             ),
-                          ],
-                        ),
+                        ],
                       ),
                     ),
                   ),

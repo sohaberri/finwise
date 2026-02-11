@@ -65,23 +65,20 @@ class _SecurityFaceIDScreenState extends State<SecurityFaceIDScreen> with Ticker
                 const SizedBox(height: 50),
                 
                 Expanded(
-                  child: _fadeIn(
-                    delay: 200,
-                    slideOffset: 100,
-                    child: Container(
-                      width: double.infinity,
-                      decoration: const BoxDecoration(
-                        color: kFormBg,
-                        borderRadius: BorderRadius.only(
-                          topLeft: Radius.circular(70),
-                          topRight: Radius.circular(70),
-                        ),
+                  child: Container(
+                    width: double.infinity,
+                    decoration: const BoxDecoration(
+                      color: kFormBg,
+                      borderRadius: BorderRadius.only(
+                        topLeft: Radius.circular(70),
+                        topRight: Radius.circular(70),
                       ),
-                      child: SingleChildScrollView(
-                        physics: const BouncingScrollPhysics(),
-                        padding: const EdgeInsets.symmetric(horizontal: 35, vertical: 60),
-                        child: Column(
-                          children: [
+                    ),
+                    child: SingleChildScrollView(
+                      physics: const BouncingScrollPhysics(),
+                      padding: const EdgeInsets.symmetric(horizontal: 35, vertical: 60),
+                      child: Column(
+                        children: [
                             // 4. FACE ID HERO ICON
                             _buildFaceIDHero(),
                             
@@ -135,8 +132,7 @@ class _SecurityFaceIDScreenState extends State<SecurityFaceIDScreen> with Ticker
                                 Navigator.push(context, MaterialPageRoute(builder: (context) => const SecurityFingerprintScreen()));
                               }
                             ),
-                          ],
-                        ),
+                        ],
                       ),
                     ),
                   ),

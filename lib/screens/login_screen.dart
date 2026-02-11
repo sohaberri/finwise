@@ -133,41 +133,35 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
 
                 Expanded(
 
-                  child: _fadeIn(
+                  child: Container(
 
-                    delay: 200,
+                    width: double.infinity,
 
-                    slideOffset: 100,
+                    decoration: const BoxDecoration(
 
-                    child: Container(
+                      color: kFormBg,
 
-                      width: double.infinity,
+                      borderRadius: BorderRadius.only(
 
-                      decoration: const BoxDecoration(
+                        topLeft: Radius.circular(70),
 
-                        color: kFormBg,
-
-                        borderRadius: BorderRadius.only(
-
-                          topLeft: Radius.circular(70),
-
-                          topRight: Radius.circular(70),
-
-                        ),
+                        topRight: Radius.circular(70),
 
                       ),
 
-                      child: SingleChildScrollView(
+                    ),
 
-                        physics: const BouncingScrollPhysics(),
+                    child: SingleChildScrollView(
 
-                        padding: const EdgeInsets.symmetric(horizontal: 35, vertical: 50),
+                      physics: const BouncingScrollPhysics(),
 
-                        child: Column(
+                      padding: const EdgeInsets.symmetric(horizontal: 35, vertical: 50),
 
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                      child: Column(
 
-                          children: [
+                        crossAxisAlignment: CrossAxisAlignment.start,
+
+                        children: [
 
                             _buildLabel("Username Or Email"),
 
@@ -297,49 +291,8 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
 
                             const SizedBox(height: 40),
 
-                            Center(
-
-                              child: RichText(
-
-                                text: TextSpan(
-
-                                  style: GoogleFonts.leagueSpartan(
-
-                                    color: const Color(0xFF093030),
-
-                                    fontSize: 14,
-
-                                  ),
-
-                                  children: const [
-
-                                    TextSpan(text: "Don’t have an account? "),
-
-                                    TextSpan(
-
-                                      text: "Sign Up",
-
-                                      style: TextStyle(
-
-                                        color: kTealAccent,
-
-                                        fontWeight: FontWeight.bold,
-
-                                      ),
-
-                                    ),
-
-                                  ],
-
-                                ),
-
-                              ),
-
-                            ),
-
-                          ],
-
-                        ),
+                            
+                        ],
 
                       ),
 

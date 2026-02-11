@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'profile_home_screen.dart';
+import 'analysis_screen.dart' show AnalysisScreen;
+import 'categories_screen.dart' show CategoriesScreen;
+import 'dashboard_screen.dart' show DashboardScreen;
+import 'profile_home_screen.dart' show ProfileHomeScreen;
+import 'transaction_screen.dart' show TransactionScreen;
 
 class CustomBottomNavBar extends StatelessWidget {
   final int selectedIndex;
@@ -37,18 +41,18 @@ class CustomBottomNavBar extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
-            _buildNavItem(Icons.home_outlined, 0),
-            _buildNavItem(Icons.analytics_outlined, 1),
-            _buildNavItem(Icons.compare_arrows_rounded, 2),
-            _buildNavItem(Icons.layers_outlined, 3),
-            _buildNavItem(Icons.person_outline, 4),
+            _buildNavItem(context, Icons.home_outlined, 0),
+            _buildNavItem(context, Icons.analytics_outlined, 1),
+            _buildNavItem(context, Icons.compare_arrows_rounded, 2),
+            _buildNavItem(context, Icons.layers_outlined, 3),
+            _buildNavItem(context, Icons.person_outline, 4),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildNavItem(IconData icon, int index) {
+  Widget _buildNavItem(BuildContext context, IconData icon, int index) {
     return Expanded(
       child: Material(
         color: Colors.transparent,
@@ -59,6 +63,36 @@ class CustomBottomNavBar extends StatelessWidget {
           onTap: () {
             HapticFeedback.lightImpact();
             onTap(index);
+            if (index == 0) {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (context) => const DashboardScreen()),
+              );
+            }
+            if (index == 1) {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (context) => const AnalysisScreen()),
+              );
+            }
+            if (index == 2) {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (context) => const TransactionScreen()),
+              );
+            }
+            if (index == 3) {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (context) => const CategoriesScreen()),
+              );
+            }
+            if (index == 4) {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (context) => const ProfileHomeScreen()),
+              );
+            }
           },
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
