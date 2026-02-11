@@ -6,6 +6,7 @@ import 'custom_nav_bar.dart';
 import 'ocr_screen.dart';
 import '../services/auth_service.dart';
 import '../services/transaction_service.dart';
+import '../services/category_service.dart';
 
 class AddExpensesScreen extends StatefulWidget {
   const AddExpensesScreen({super.key});
@@ -26,7 +27,8 @@ class _AddExpensesScreenState extends State<AddExpensesScreen> with TickerProvid
   final TextEditingController _amountController = TextEditingController();
   final TextEditingController _notesController = TextEditingController();
   DateTime _selectedDate = DateTime.now();
-  String _selectedCategory = TransactionService.categories.first;
+  String _selectedCategory = '';
+  List<CategoryEntry> _categories = [];
   static const List<String> _savingsGoals = [
     'Travel',
     'New House',
@@ -50,6 +52,27 @@ class _AddExpensesScreenState extends State<AddExpensesScreen> with TickerProvid
       vsync: this,
       duration: const Duration(milliseconds: 1000),
     )..repeat(reverse: true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadCategories();
+    });
+  }
+
+  Future<void> _loadCategories() async {
+    final auth = AuthScope.of(context);
+    final email = auth.currentUser?.email;
+    if (email == null || email.isEmpty) {
+      return;
+    }
+    final loaded = await CategoryService.instance.loadForUser(email);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _categories = loaded;
+      if (_categories.isNotEmpty) {
+        _selectedCategory = _categories.first.name;
+      }
+    });
   }
 
   @override
@@ -321,14 +344,14 @@ class _AddExpensesScreenState extends State<AddExpensesScreen> with TickerProvid
           decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<String>(
-              value: _selectedCategory,
+              value: _selectedCategory.isEmpty ? null : _selectedCategory,
               isExpanded: true,
               icon: const Icon(Icons.keyboard_arrow_down_rounded, color: kAccentPurple),
               style: GoogleFonts.poppins(color: kTextDark, fontSize: 15),
-              items: TransactionService.categories
+              items: _categories
                   .map((category) => DropdownMenuItem<String>(
-                        value: category,
-                        child: Text(category),
+                        value: category.name,
+                        child: Text(category.name),
                       ))
                   .toList(),
               onChanged: (value) {

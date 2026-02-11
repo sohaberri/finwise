@@ -230,7 +230,7 @@ class _FoodCategoryScreenState extends State<FoodCategoryScreen> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           GestureDetector(
-              onTap: () => Navigator.pop(context),
+              onTap: () => Navigator.pop(context, true),
               child: const Icon(Icons.arrow_back, color: Colors.white)),
           Text("Food",
               style: GoogleFonts.poppins(
@@ -359,14 +359,14 @@ class _FoodCategoryScreenState extends State<FoodCategoryScreen> {
     return Column(
       children: [
         Row(children: [
-          Icon(icon, color: Colors.white, size: 16),
+          Icon(icon, color: const Color.fromARGB(255, 47, 27, 64), size: 16),
           const SizedBox(width: 5),
           Text(label,
-              style: GoogleFonts.poppins(color: Colors.white70, fontSize: 12))
+              style: GoogleFonts.poppins(color: Colors.black, fontSize: 12))
         ]),
         Text(amount,
             style: GoogleFonts.poppins(
-                color: isExpense ? Colors.cyanAccent : Colors.white,
+                color: isExpense ? Colors.cyanAccent : Colors.black,
                 fontSize: 20,
                 fontWeight: FontWeight.bold)),
       ],

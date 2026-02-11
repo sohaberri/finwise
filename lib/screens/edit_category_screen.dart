@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../services/auth_service.dart';
+import '../services/category_service.dart';
 
 class EditCategoryScreen extends StatefulWidget {
-  final Map<String, dynamic> category;
+  final CategoryEntry? categoryEntry;
+  final Map<String, dynamic>? category; // For backwards compatibility
 
-  const EditCategoryScreen({super.key, required this.category});
+  const EditCategoryScreen({super.key, this.categoryEntry, this.category});
 
   @override
   State<EditCategoryScreen> createState() => _EditCategoryScreenState();
@@ -18,24 +21,46 @@ class _EditCategoryScreenState extends State<EditCategoryScreen> {
   static const kCategoryColor = Color(0xFF81C9CC);
 
   late TextEditingController _nameController;
-  late TextEditingController _descriptionController;
-  late IconData selectedIcon;
+  late String selectedIconName;
   late String previewName;
+  late CategoryEntry? currentEntry;
 
-  final List<IconData> availableIcons = [
-    Icons.auto_awesome, Icons.favorite, Icons.pets, 
-    Icons.shopping_bag, Icons.fastfood, Icons.fitness_center,
-    Icons.movie, Icons.brush, Icons.icecream, Icons.celebration
-  ];
+  // Map of icon names to IconData for selection
+  final Map<String, IconData> availableIcons = {
+    'restaurant': Icons.restaurant,
+    'directions_bus': Icons.directions_bus,
+    'medical_services': Icons.medical_services,
+    'shopping_bag': Icons.shopping_bag,
+    'vpn_key': Icons.vpn_key,
+    'card_giftcard': Icons.card_giftcard,
+    'savings': Icons.savings,
+    'confirmation_number': Icons.confirmation_number,
+    'flight_takeoff': Icons.flight_takeoff,
+    'vpn_key_outlined': Icons.vpn_key_outlined,
+    'directions_car': Icons.directions_car,
+    'favorite': Icons.favorite,
+    'payments': Icons.payments,
+    'account_balance_wallet': Icons.account_balance_wallet,
+  };
 
   @override
   void initState() {
     super.initState();
-    // Pre-fill data from the existing category
-    _nameController = TextEditingController(text: widget.category['name']);
-    _descriptionController = TextEditingController(text: widget.category['description'] ?? "");
-    selectedIcon = widget.category['icon'] ?? Icons.auto_awesome;
-    previewName = widget.category['name'];
+    currentEntry = widget.categoryEntry;
+    
+    if (widget.categoryEntry != null) {
+      _nameController = TextEditingController(text: widget.categoryEntry!.name);
+      selectedIconName = widget.categoryEntry!.icon;
+      previewName = widget.categoryEntry!.name;
+    } else if (widget.category != null) {
+      _nameController = TextEditingController(text: widget.category!['name']);
+      selectedIconName = _iconNameFromIconData(widget.category!['icon'] ?? Icons.receipt);
+      previewName = widget.category!['name'];
+    } else {
+      _nameController = TextEditingController();
+      selectedIconName = 'receipt_long';
+      previewName = 'New Category';
+    }
 
     _nameController.addListener(() {
       setState(() {
@@ -47,8 +72,17 @@ class _EditCategoryScreenState extends State<EditCategoryScreen> {
   @override
   void dispose() {
     _nameController.dispose();
-    _descriptionController.dispose();
     super.dispose();
+  }
+
+  String _iconNameFromIconData(IconData icon) {
+    // Find the icon name from availableIcons map
+    for (final entry in availableIcons.entries) {
+      if (entry.value.codePoint == icon.codePoint) {
+        return entry.key;
+      }
+    }
+    return 'receipt_long';
   }
 
   @override
@@ -94,11 +128,6 @@ class _EditCategoryScreenState extends State<EditCategoryScreen> {
                         children: [
                           _buildLabel("Update Name:"),
                           _buildTextField(_nameController, "e.g. Dream Trip"),
-                          
-                          const SizedBox(height: 25),
-                          
-                          _buildLabel("Update Description: "),
-                          _buildTextField(_descriptionController, "Optional detail...", maxLines: 2),
                           
                           const SizedBox(height: 25),
                           
@@ -175,7 +204,7 @@ class _EditCategoryScreenState extends State<EditCategoryScreen> {
                       BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 20, offset: const Offset(0, 10))
                     ],
                   ),
-                  child: Icon(selectedIcon, color: Colors.white, size: 40),
+                  child: Icon(availableIcons[selectedIconName] ?? Icons.receipt_long, color: Colors.white, size: 40),
                 ),
                 const SizedBox(height: 12),
                 Text(
@@ -201,19 +230,32 @@ class _EditCategoryScreenState extends State<EditCategoryScreen> {
           BoxShadow(color: kDeepBlue.withOpacity(0.3), blurRadius: 20, offset: const Offset(0, 10)),
         ],
       ),
-      child: ElevatedButton(
-        onPressed: () {
-          // Add your Save logic here!
-          Navigator.pop(context);
-        },
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.transparent,
-          shadowColor: Colors.transparent,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
-        ),
-        child: Text(
-          "Save Changes ✅",
-          style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.white),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(25),
+          onTap: () async {
+            if (currentEntry != null) {
+              // Update existing category
+              final updated = currentEntry!.copyWith(
+                name: _nameController.text,
+                icon: selectedIconName,
+              );
+              final auth = AuthScope.of(context);
+              final email = auth.currentUser?.email;
+              if (email != null && email.isNotEmpty) {
+                await CategoryService.instance.updateForUser(email, updated);
+              }
+            }
+            if (!mounted) return;
+            Navigator.pop(context, true);
+          },
+          child: Center(
+            child: Text(
+              "Save Changes",
+              style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.white),
+            ),
+          ),
         ),
       ),
     );
@@ -227,9 +269,11 @@ class _EditCategoryScreenState extends State<EditCategoryScreen> {
         physics: const BouncingScrollPhysics(),
         itemCount: availableIcons.length,
         itemBuilder: (context, index) {
-          bool isSelected = selectedIcon == availableIcons[index];
+          final iconName = availableIcons.keys.toList()[index];
+          final icon = availableIcons[iconName]!;
+          bool isSelected = selectedIconName == iconName;
           return GestureDetector(
-            onTap: () => setState(() => selectedIcon = availableIcons[index]),
+            onTap: () => setState(() => selectedIconName = iconName),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 300),
               width: 65,
@@ -245,7 +289,7 @@ class _EditCategoryScreenState extends State<EditCategoryScreen> {
                 ],
               ),
               child: Icon(
-                availableIcons[index],
+                icon,
                 color: isSelected ? Colors.white : kDeepBlue.withOpacity(0.5),
                 size: isSelected ? 30 : 24,
               ),

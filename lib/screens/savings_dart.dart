@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'custom_nav_bar.dart';
-import 'food_category_screen.dart';
+import 'category_detail_screen.dart';
 import 'add_category_screen.dart';
 import 'edit_category_screen.dart';
-import 'savings_category_screen.dart';
 import '../services/auth_service.dart';
 import '../services/budget_service.dart';
 import '../services/transaction_service.dart';
+import '../services/category_service.dart';
 
 class SavingsScreen extends StatefulWidget {
   const SavingsScreen({super.key});
@@ -23,23 +23,56 @@ class _SavingsScreenState extends State<SavingsScreen> {
   static const kTextDark = Color(0xFF052224);
   static const kCategoryColor = Color(0xFF81C9CC);
 
-  List<TransactionEntry> _transactions = [];
+  List<CategoryEntry> _categories = [];
   bool _isLoading = true;
   double _monthlyIncome = 0.0;
 
-  // Updated categories to match the screenshots provided
-  final List<Map<String, dynamic>> categories = [
-    {"name": "Travel", "icon": Icons.flight_takeoff_rounded},
-    {"name": "New House", "icon": Icons.vpn_key_outlined},
-    {"name": "Car", "icon": Icons.directions_car_filled_rounded},
-    {"name": "Wedding", "icon": Icons.favorite_border_rounded},
-    {"name": "Salary", "icon": Icons.payments_outlined},
-    {"name": "Others", "icon": Icons.account_balance_wallet_outlined},
-    {"name": "More", "icon": Icons.add},
-  ];
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadCategories();
+      _loadBudget();
+    });
+  }
+
+  Future<void> _loadCategories() async {
+    final auth = AuthScope.of(context);
+    final email = auth.currentUser?.email;
+    if (email == null || email.isEmpty) {
+      setState(() {
+        _categories = [];
+        _isLoading = false;
+      });
+      return;
+    }
+    final loaded = await CategoryService.instance.loadForUser(email);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _categories = loaded;
+      _isLoading = false;
+    });
+  }
+
+  Future<void> _loadBudget() async {
+    final auth = AuthScope.of(context);
+    final email = auth.currentUser?.email;
+    if (email == null || email.isEmpty) {
+      return;
+    }
+    final saved = await BudgetService.instance.loadForUser(email);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _monthlyIncome = saved?.monthlyIncome ?? 0.0;
+    });
+  }
 
   // --- SHOW BOTTOM SHEET FOR EDIT/DELETE ---
-  void _showCategoryOptions(Map<String, dynamic> category) {
+  void _showCategoryOptions(CategoryEntry category) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -61,7 +94,7 @@ class _SavingsScreenState extends State<SavingsScreen> {
             ),
             const SizedBox(height: 25),
             Text(
-              "Manage ${category['name']}",
+              "Manage ${category.name}",
               style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w700, color: kTextDark),
             ),
             const SizedBox(height: 25),
@@ -73,7 +106,7 @@ class _SavingsScreenState extends State<SavingsScreen> {
                 Navigator.pop(context);
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => EditCategoryScreen(category: category)),
+                  MaterialPageRoute(builder: (context) => EditCategoryScreen(categoryEntry: category)),
                 );
               },
             ),
@@ -84,7 +117,7 @@ class _SavingsScreenState extends State<SavingsScreen> {
               label: "Delete Category",
               onTap: () {
                 Navigator.pop(context);
-                _showDeleteConfirmation(category['name']);
+                _showDeleteConfirmation(category);
               },
             ),
             const SizedBox(height: 20),
@@ -166,8 +199,13 @@ class _SavingsScreenState extends State<SavingsScreen> {
                                 mainAxisSpacing: 25,
                                 childAspectRatio: 0.85,
                               ),
-                              itemCount: categories.length,
-                              itemBuilder: (context, index) => _buildCategoryItem(categories[index]),
+                              itemCount: _categories.length + 1,
+                              itemBuilder: (context, index) {
+                                if (index == _categories.length) {
+                                  return _buildAddCategoryItem();
+                                }
+                                return _buildCategoryItem(_categories[index]);
+                              },
                             ),
                             const SizedBox(height: 30),
                             _buildAddButton(),
@@ -186,68 +224,24 @@ class _SavingsScreenState extends State<SavingsScreen> {
     );
   }
 
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadTransactions();
-      _loadBudget();
-    });
-  }
-
-  Future<void> _loadTransactions() async {
-    final auth = AuthScope.of(context);
-    final email = auth.currentUser?.email;
-    if (email == null || email.isEmpty) {
-      setState(() {
-        _transactions = [];
-        _isLoading = false;
-      });
-      return;
-    }
-
-    final list = await TransactionService.instance.loadForUser(email);
-    list.sort((a, b) => b.dateTime.compareTo(a.dateTime));
-    if (!mounted) {
-      return;
-    }
-    setState(() {
-      _transactions = list;
-      _isLoading = false;
-    });
-  }
-
-  Future<void> _loadBudget() async {
-    final auth = AuthScope.of(context);
-    final email = auth.currentUser?.email;
-    if (email == null || email.isEmpty) {
-      return;
-    }
-    final saved = await BudgetService.instance.loadForUser(email);
-    if (!mounted) {
-      return;
-    }
-    setState(() {
-      _monthlyIncome = saved?.monthlyIncome ?? 0.0;
-    });
-  }
-
-  Widget _buildCategoryItem(Map<String, dynamic> category) {
+  Widget _buildCategoryItem(CategoryEntry category) {
     return Column(
       children: [
         Expanded(
           child: InkWell(
-            onTap: () {
-              if (category['name'] != 'More') {
-                Navigator.push(context, MaterialPageRoute(builder: (context) => SavingsCategoryScreen()));
-              } else {
-                Navigator.push(context, MaterialPageRoute(builder: (context) => const AddCategoryScreen()));
+            onTap: () async {
+              final updated = await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => CategoryDetailScreen(categoryName: category.name),
+                ),
+              );
+              if (updated == true) {
+                _loadCategories();
               }
             },
             onLongPress: () {
-              if (category['name'] != 'More') {
-                _showCategoryOptions(category);
-              }
+              _showCategoryOptions(category);
             },
             borderRadius: BorderRadius.circular(20),
             child: Container(
@@ -259,27 +253,69 @@ class _SavingsScreenState extends State<SavingsScreen> {
                   BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))
                 ],
               ),
-              child: Icon(category['icon'], color: Colors.white, size: 35),
+              child: Icon(_getIconFromString(category.icon), color: Colors.white, size: 35),
             ),
           ),
         ),
         const SizedBox(height: 8),
-        Text(category['name'], style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600, color: kTextDark)),
+        Text(category.name, style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600, color: kTextDark)),
       ],
     );
   }
 
-  void _showDeleteConfirmation(String name) {
+  Widget _buildAddCategoryItem() {
+    return Column(
+      children: [
+        Expanded(
+          child: InkWell(
+            onTap: () async {
+              final added = await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const AddCategoryScreen()),
+              );
+              if (added == true) {
+                _loadCategories();
+              }
+            },
+            borderRadius: BorderRadius.circular(20),
+            child: Container(
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: kCategoryColor.withOpacity(0.3),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: kCategoryColor, width: 2),
+              ),
+              child: const Icon(Icons.add, color: kCategoryColor, size: 35),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text("More", style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600, color: kTextDark)),
+      ],
+    );
+  }
+
+  void _showDeleteConfirmation(CategoryEntry category) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text("Delete $name?", style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
+        title: Text("Delete ${category.name}?", style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
         content: const Text("This category and its history will be permanently removed."),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
           ElevatedButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () async {
+              final auth = AuthScope.of(context);
+              final email = auth.currentUser?.email;
+              if (email != null && email.isNotEmpty) {
+                await CategoryService.instance.deleteForUser(email, category.id);
+                if (mounted) {
+                  Navigator.pop(context);
+                  _loadCategories();
+                }
+              }
+            },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, shape: const StadiumBorder()),
             child: const Text("Delete", style: TextStyle(color: Colors.white)),
           ),
@@ -365,11 +401,46 @@ class _SavingsScreenState extends State<SavingsScreen> {
     );
   }
 
-  double get _totalIncome => _transactions.where((entry) => entry.amount >= 0).fold(0.0, (sum, entry) => sum + entry.amount);
+  double get _totalIncome => 0.0;
 
-  double get _totalExpenses => _transactions.where((entry) => entry.amount < 0).fold(0.0, (sum, entry) => sum + entry.amount.abs());
+  double get _totalExpenses => 0.0;
 
-  double get _balance => _transactions.fold(0.0, (sum, entry) => sum + entry.amount);
+  double get _balance => 0.0;
+
+  IconData _getIconFromString(String iconName) {
+    switch (iconName) {
+      case 'restaurant':
+        return Icons.restaurant;
+      case 'directions_bus':
+        return Icons.directions_bus;
+      case 'medical_services':
+        return Icons.medical_services;
+      case 'shopping_bag':
+        return Icons.shopping_bag;
+      case 'vpn_key':
+        return Icons.vpn_key;
+      case 'card_giftcard':
+        return Icons.card_giftcard;
+      case 'savings':
+        return Icons.savings;
+      case 'confirmation_number':
+        return Icons.confirmation_number;
+      case 'flight_takeoff':
+        return Icons.flight_takeoff;
+      case 'vpn_key_outlined':
+        return Icons.vpn_key_outlined;
+      case 'directions_car':
+        return Icons.directions_car;
+      case 'favorite':
+        return Icons.favorite;
+      case 'payments':
+        return Icons.payments;
+      case 'account_balance_wallet':
+        return Icons.account_balance_wallet;
+      default:
+        return Icons.receipt_long;
+    }
+  }
 
   String _formatCurrency(double amount, {bool signed = false}) {
     final value = amount.abs().toStringAsFixed(2);
@@ -387,7 +458,7 @@ class _SavingsScreenState extends State<SavingsScreen> {
           children: [
             Icon(icon, color: Colors.white, size: 16),
             const SizedBox(width: 5),
-            Text(label, style: GoogleFonts.poppins(color: Colors.white70, fontSize: 12)),
+            Text(label, style: GoogleFonts.poppins(color: Colors.white38, fontSize: 12)),
           ],
         ),
         Text(amount, style: GoogleFonts.poppins(color: isExpense ? Colors.cyanAccent : Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),

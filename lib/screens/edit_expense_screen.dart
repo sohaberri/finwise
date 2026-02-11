@@ -6,6 +6,7 @@ import 'custom_nav_bar.dart';
 import 'ocr_screen.dart';
 import '../services/auth_service.dart';
 import '../services/transaction_service.dart';
+import '../services/category_service.dart';
 
 class EditExpenseScreen extends StatefulWidget {
   const EditExpenseScreen({super.key, required this.entry});
@@ -30,6 +31,7 @@ class _EditExpenseScreenState extends State<EditExpenseScreen> with TickerProvid
   
   DateTime _selectedDate = DateTime.now();
   late String _selectedCategory;
+  List<CategoryEntry> _categories = [];
   static const List<String> _savingsGoals = [
     'Travel',
     'New House',
@@ -59,6 +61,30 @@ class _EditExpenseScreenState extends State<EditExpenseScreen> with TickerProvid
       vsync: this,
       duration: const Duration(milliseconds: 1000),
     )..repeat(reverse: true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadCategories();
+    });
+  }
+
+  Future<void> _loadCategories() async {
+    final auth = AuthScope.of(context);
+    final email = auth.currentUser?.email;
+    if (email == null || email.isEmpty) {
+      return;
+    }
+    final loaded = await CategoryService.instance.loadForUser(email);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _categories = loaded;
+      // Ensure selected category is valid after loading
+      if (!_categories.any((c) => c.name == _selectedCategory)) {
+        if (_categories.isNotEmpty) {
+          _selectedCategory = _categories.first.name;
+        }
+      }
+    });
   }
 
   @override
@@ -343,14 +369,14 @@ class _EditExpenseScreenState extends State<EditExpenseScreen> with TickerProvid
           decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<String>(
-              value: _selectedCategory,
+              value: _selectedCategory.isEmpty ? null : _selectedCategory,
               isExpanded: true,
               icon: const Icon(Icons.keyboard_arrow_down_rounded, color: kAccentPurple),
               style: GoogleFonts.poppins(color: kTextDark, fontSize: 15),
-              items: TransactionService.categories
+              items: _categories
                   .map((category) => DropdownMenuItem<String>(
-                        value: category,
-                        child: Text(category),
+                        value: category.name,
+                        child: Text(category.name),
                       ))
                   .toList(),
               onChanged: (value) {

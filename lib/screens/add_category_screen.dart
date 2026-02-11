@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../services/auth_service.dart';
+import '../services/category_service.dart';
 
 class AddCategoryScreen extends StatefulWidget {
   const AddCategoryScreen({super.key});
@@ -16,16 +18,30 @@ class _AddCategoryScreenState extends State<AddCategoryScreen> {
   static const kCategoryColor = Color(0xFF81C9CC);
 
   final _nameController = TextEditingController();
-  final _descriptionController = TextEditingController();
   
-  final List<IconData> availableIcons = [
-    Icons.auto_awesome, Icons.favorite, Icons.pets, 
-    Icons.shopping_bag, Icons.fastfood, Icons.fitness_center,
-    Icons.movie, Icons.brush, Icons.icecream, Icons.celebration
-  ];
+  // Map icon names to IconData for selection
+  final Map<String, IconData> availableIcons = {
+    'restaurant': Icons.restaurant,
+    'directions_bus': Icons.directions_bus,
+    'medical_services': Icons.medical_services,
+    'shopping_bag': Icons.shopping_bag,
+    'vpn_key': Icons.vpn_key,
+    'card_giftcard': Icons.card_giftcard,
+    'savings': Icons.savings,
+    'confirmation_number': Icons.confirmation_number,
+    'flight_takeoff': Icons.flight_takeoff,
+    'favorite': Icons.favorite,
+    'auto_awesome': Icons.auto_awesome,
+  };
 
-  IconData selectedIcon = Icons.auto_awesome;
+  String selectedIconName = 'auto_awesome';
   String previewName = "Category Name";
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -85,11 +101,6 @@ class _AddCategoryScreenState extends State<AddCategoryScreen> {
                           
                           const SizedBox(height: 25),
                           
-                          _buildLabel("Description: "),
-                          _buildTextField(_descriptionController, "Optional detail...", maxLines: 2),
-                          
-                          const SizedBox(height: 25),
-                          
                           _buildLabel("Pick an icon"),
                           const SizedBox(height: 10),
                           _buildIconSelector(),
@@ -138,7 +149,7 @@ class _AddCategoryScreenState extends State<AddCategoryScreen> {
                       BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 20, offset: const Offset(0, 10))
                     ],
                   ),
-                  child: Icon(selectedIcon, color: Colors.white, size: 40),
+                  child: Icon(availableIcons[selectedIconName] ?? Icons.auto_awesome, color: Colors.white, size: 40),
                 ),
                 const SizedBox(height: 12),
                 Text(
@@ -169,7 +180,24 @@ class _AddCategoryScreenState extends State<AddCategoryScreen> {
         ],
       ),
       child: ElevatedButton(
-        onPressed: () => Navigator.pop(context),
+        onPressed: () async {
+          final name = _nameController.text.trim();
+          if (name.isEmpty) return;
+
+          final auth = AuthScope.of(context);
+          final email = auth.currentUser?.email;
+          if (email == null || email.isEmpty) return;
+
+          final entry = CategoryEntry(
+            id: '${name}_${DateTime.now().millisecondsSinceEpoch}',
+            name: name,
+            icon: selectedIconName,
+          );
+
+          await CategoryService.instance.addForUser(email, entry);
+          if (!mounted) return;
+          Navigator.pop(context, true);
+        },
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.transparent,
           shadowColor: Colors.transparent,
@@ -191,9 +219,11 @@ class _AddCategoryScreenState extends State<AddCategoryScreen> {
         physics: const BouncingScrollPhysics(),
         itemCount: availableIcons.length,
         itemBuilder: (context, index) {
-          bool isSelected = selectedIcon == availableIcons[index];
+          final iconName = availableIcons.keys.toList()[index];
+          final icon = availableIcons[iconName]!;
+          bool isSelected = selectedIconName == iconName;
           return GestureDetector(
-            onTap: () => setState(() => selectedIcon = availableIcons[index]),
+            onTap: () => setState(() => selectedIconName = iconName),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 300),
               width: 65,
@@ -209,7 +239,7 @@ class _AddCategoryScreenState extends State<AddCategoryScreen> {
                 ],
               ),
               child: Icon(
-                availableIcons[index],
+                icon,
                 color: isSelected ? Colors.white : kDeepBlue.withOpacity(0.5),
                 size: isSelected ? 30 : 24,
               ),

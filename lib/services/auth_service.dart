@@ -109,6 +109,32 @@ class AuthService extends ChangeNotifier {
     _currentUser = null;
     notifyListeners();
   }
+
+  Future<void> updateProfile({
+    required String fullName,
+    required String email,
+    required String password,
+  }) async {
+    // TODO: Replace with backend update call.
+    // Backend should:
+    // 1. Validate email format and ensure it's unique
+    // 2. Securely hash and store the new password
+    // 3. Update user's fullName, email, and password
+    // 4. Invalidate old tokens and return new auth tokens
+    // 5. Handle any validation errors and return appropriate error messages
+
+    // Local update for demo
+    await _prefs.setString(_kFullNameKey, fullName);
+    await _prefs.setString(_kEmailKey, email);
+    await _prefs.setString(_kPasswordKey, password);
+
+    // Update current user
+    _currentUser = AuthUser(
+      email: email,
+      fullName: fullName,
+    );
+    notifyListeners();
+  }
 }
 
 class AuthScope extends InheritedNotifier<AuthService> {

@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'custom_nav_bar.dart';
-import 'food_category_screen.dart';
+import 'category_detail_screen.dart';
 import 'add_category_screen.dart';
 import 'edit_category_screen.dart';
-import 'savings_dart.dart';
 import '../services/auth_service.dart';
 import '../services/budget_service.dart';
 import '../services/transaction_service.dart';
+import '../services/category_service.dart';
 
 class CategoriesScreen extends StatefulWidget {
   const CategoriesScreen({super.key});
@@ -23,24 +23,78 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   static const kTextDark = Color(0xFF052224);
   static const kCategoryColor = Color(0xFF81C9CC);
 
+  List<CategoryEntry> _categories = [];
   List<TransactionEntry> _transactions = [];
   bool _isLoading = true;
   double _monthlyIncome = 0.0;
 
-  final List<Map<String, dynamic>> categories = [
-    {"name": "Food", "icon": Icons.restaurant},
-    {"name": "Transport", "icon": Icons.directions_bus},
-    {"name": "Medicine", "icon": Icons.medical_services},
-    {"name": "Groceries", "icon": Icons.shopping_basket},
-    {"name": "Rent", "icon": Icons.vpn_key},
-    {"name": "Gifts", "icon": Icons.card_giftcard},
-    {"name": "Savings", "icon": Icons.savings},
-    {"name": "Entertainment", "icon": Icons.confirmation_number},
-    {"name": "More", "icon": Icons.add},
-  ];
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadCategories();
+      _loadTransactions();
+      _loadBudget();
+    });
+  }
+
+  Future<void> _loadCategories() async {
+    final auth = AuthScope.of(context);
+    final email = auth.currentUser?.email;
+    if (email == null || email.isEmpty) {
+      setState(() {
+        _categories = [];
+        _isLoading = false;
+      });
+      return;
+    }
+    final loaded = await CategoryService.instance.loadForUser(email);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _categories = loaded;
+      _isLoading = false;
+    });
+  }
+
+  Future<void> _loadTransactions() async {
+    final auth = AuthScope.of(context);
+    final email = auth.currentUser?.email;
+    if (email == null || email.isEmpty) {
+      setState(() {
+        _transactions = [];
+      });
+      return;
+    }
+
+    final list = await TransactionService.instance.loadForUser(email);
+    list.sort((a, b) => b.dateTime.compareTo(a.dateTime));
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _transactions = list;
+    });
+  }
+
+  Future<void> _loadBudget() async {
+    final auth = AuthScope.of(context);
+    final email = auth.currentUser?.email;
+    if (email == null || email.isEmpty) {
+      return;
+    }
+    final saved = await BudgetService.instance.loadForUser(email);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _monthlyIncome = saved?.monthlyIncome ?? 0.0;
+    });
+  }
 
   // --- SHOW BOTTOM SHEET FOR EDIT/DELETE ---
-  void _showCategoryOptions(Map<String, dynamic> category) {
+  void _showCategoryOptions(CategoryEntry category) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -62,7 +116,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
             ),
             const SizedBox(height: 25),
             Text(
-              "Manage ${category['name']}",
+              "Manage ${category.name}",
               style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w700, color: kTextDark),
             ),
             const SizedBox(height: 25),
@@ -74,7 +128,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                 Navigator.pop(context);
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => EditCategoryScreen(category: category)),
+                  MaterialPageRoute(builder: (context) => EditCategoryScreen(categoryEntry: category)),
                 );
               },
             ),
@@ -85,7 +139,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
               label: "Delete Category",
               onTap: () {
                 Navigator.pop(context);
-                _showDeleteConfirmation(category['name']);
+                _showDeleteConfirmation(category);
               },
             ),
             const SizedBox(height: 20),
@@ -167,8 +221,13 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                                 mainAxisSpacing: 25,
                                 childAspectRatio: 0.85,
                               ),
-                              itemCount: categories.length,
-                              itemBuilder: (context, index) => _buildCategoryItem(categories[index]),
+                              itemCount: _categories.length + 1,
+                              itemBuilder: (context, index) {
+                                if (index == _categories.length) {
+                                  return _buildAddCategoryItem();
+                                }
+                                return _buildCategoryItem(_categories[index]);
+                              },
                             ),
                             const SizedBox(height: 30),
                             _buildAddButton(),
@@ -187,74 +246,24 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
     );
   }
 
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadTransactions();
-      _loadBudget();
-    });
-  }
-
-  Future<void> _loadTransactions() async {
-    final auth = AuthScope.of(context);
-    final email = auth.currentUser?.email;
-    if (email == null || email.isEmpty) {
-      setState(() {
-        _transactions = [];
-        _isLoading = false;
-      });
-      return;
-    }
-
-    final list = await TransactionService.instance.loadForUser(email);
-    list.sort((a, b) => b.dateTime.compareTo(a.dateTime));
-    if (!mounted) {
-      return;
-    }
-    setState(() {
-      _transactions = list;
-      _isLoading = false;
-    });
-  }
-
-  Future<void> _loadBudget() async {
-    final auth = AuthScope.of(context);
-    final email = auth.currentUser?.email;
-    if (email == null || email.isEmpty) {
-      return;
-    }
-    final saved = await BudgetService.instance.loadForUser(email);
-    if (!mounted) {
-      return;
-    }
-    setState(() {
-      _monthlyIncome = saved?.monthlyIncome ?? 0.0;
-    });
-  }
-
-  Widget _buildCategoryItem(Map<String, dynamic> category) {
-    final isFood = category['name'] == 'Food';
-    final isSavings = category['name'] == 'Savings';
-
+  Widget _buildCategoryItem(CategoryEntry category) {
     return Column(
       children: [
         Expanded(
           child: InkWell(
-            onTap: () {
-              if (isFood) {
-                Navigator.push(context, MaterialPageRoute(builder: (context) => const FoodCategoryScreen()));
-              } else if (isSavings) {
-                Navigator.push(context, MaterialPageRoute(builder: (context) => const SavingsScreen()));
-              } else if (category['name'] == 'More') {
-                Navigator.push(context, MaterialPageRoute(builder: (context) => const AddCategoryScreen()));
+            onTap: () async {
+              final updated = await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => CategoryDetailScreen(categoryName: category.name),
+                ),
+              );
+              if (updated == true) {
+                _loadTransactions();
               }
             },
-            // LONG PRESS TRIGGER
             onLongPress: () {
-              if (category['name'] != 'More') {
-                _showCategoryOptions(category);
-              }
+              _showCategoryOptions(category);
             },
             borderRadius: BorderRadius.circular(20),
             child: Container(
@@ -266,34 +275,74 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                   BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))
                 ],
               ),
-              child: Icon(category['icon'], color: Colors.white, size: 35),
+              child: Icon(_getIconFromString(category.icon), color: Colors.white, size: 35),
             ),
           ),
         ),
         const SizedBox(height: 8),
-        Text(category['name'], style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600, color: kTextDark)),
+        Text(category.name, style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600, color: kTextDark)),
       ],
     );
   }
 
-  // --- UI SUPPORT METHODS ---
-
-  void _showDeleteConfirmation(String name) {
+  void _showDeleteConfirmation(CategoryEntry category) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text("Delete $name?", style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
+        title: Text("Delete ${category.name}?", style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
         content: const Text("This category and its history will be permanently removed."),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
           ElevatedButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () async {
+              final auth = AuthScope.of(context);
+              final email = auth.currentUser?.email;
+              if (email != null && email.isNotEmpty) {
+                await CategoryService.instance.deleteForUser(email, category.id);
+                if (mounted) {
+                  Navigator.pop(context);
+                  _loadCategories();
+                }
+              }
+            },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, shape: const StadiumBorder()),
             child: const Text("Delete", style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildAddCategoryItem() {
+    return Column(
+      children: [
+        Expanded(
+          child: InkWell(
+            onTap: () async {
+              final added = await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const AddCategoryScreen()),
+              );
+              if (added == true) {
+                _loadCategories();
+              }
+            },
+            borderRadius: BorderRadius.circular(20),
+            child: Container(
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: kCategoryColor.withOpacity(0.3),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: kCategoryColor, width: 2),
+              ),
+              child: const Icon(Icons.add, color: kCategoryColor, size: 35),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text("More", style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600, color: kTextDark)),
+      ],
     );
   }
 
@@ -380,6 +429,41 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
 
   double get _balance => _transactions.fold(0.0, (sum, entry) => sum + entry.amount);
 
+  IconData _getIconFromString(String iconName) {
+    switch (iconName) {
+      case 'restaurant':
+        return Icons.restaurant;
+      case 'directions_bus':
+        return Icons.directions_bus;
+      case 'medical_services':
+        return Icons.medical_services;
+      case 'shopping_bag':
+        return Icons.shopping_bag;
+      case 'vpn_key':
+        return Icons.vpn_key;
+      case 'card_giftcard':
+        return Icons.card_giftcard;
+      case 'savings':
+        return Icons.savings;
+      case 'confirmation_number':
+        return Icons.confirmation_number;
+      case 'flight_takeoff':
+        return Icons.flight_takeoff;
+      case 'vpn_key_outlined':
+        return Icons.vpn_key_outlined;
+      case 'directions_car':
+        return Icons.directions_car;
+      case 'favorite':
+        return Icons.favorite;
+      case 'payments':
+        return Icons.payments;
+      case 'account_balance_wallet':
+        return Icons.account_balance_wallet;
+      default:
+        return Icons.receipt_long;
+    }
+  }
+
   String _formatCurrency(double amount, {bool signed = false}) {
     final value = amount.abs().toStringAsFixed(2);
     if (signed) {
@@ -396,7 +480,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
           children: [
             Icon(icon, color: Colors.white, size: 16),
             const SizedBox(width: 5),
-            Text(label, style: GoogleFonts.poppins(color: Colors.white70, fontSize: 12)),
+            Text(label, style: GoogleFonts.poppins(color: Colors.white38, fontSize: 12)),
           ],
         ),
         Text(amount, style: GoogleFonts.poppins(color: isExpense ? Colors.cyanAccent : Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),

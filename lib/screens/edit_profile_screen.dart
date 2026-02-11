@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'custom_nav_bar.dart';
+import '../services/auth_service.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -16,13 +17,118 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   static const kTealGreen = Color(0xFF00D09E);
   static const kFormBg = Color(0xFFF3F2FF);
   static const kTextDark = Color(0xFF093030);
-  static const kFieldBg = Color(0xFF5E5F92); 
+  static const kFieldBg = Color(0xFF5E5F92);
 
-  bool pushNotifications = true;
-  bool darkTheme = false;
+  late TextEditingController _fullNameController;
+  late TextEditingController _emailController;
+  late TextEditingController _passwordController;
+  bool _isLoading = false;
+  bool _initialized = false;
+
+  // Password validation states
+  bool hasUppercase = false;
+  bool hasDigits = false;
+  bool hasSpecialCharacters = false;
+  bool hasMinLength = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Initialize controllers without values - they'll be populated in didChangeDependencies
+    _fullNameController = TextEditingController();
+    _emailController = TextEditingController();
+    _passwordController = TextEditingController();
+    // Listen to password changes for validation
+    _passwordController.addListener(_validatePassword);
+  }
+
+  void _validatePassword() {
+    final password = _passwordController.text;
+    setState(() {
+      hasUppercase = password.contains(RegExp(r'[A-Z]'));
+      hasDigits = password.contains(RegExp(r'[0-9]'));
+      hasSpecialCharacters = password.contains(RegExp(r'[!@#$%^&*(),.?":{}|<>]'));
+      hasMinLength = password.length >= 8;
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Initialize data after inherited widgets are available
+    if (!_initialized) {
+      final auth = AuthScope.of(context);
+      _fullNameController.text = auth.currentUser?.fullName ?? '';
+      _emailController.text = auth.currentUser?.email ?? '';
+      _initialized = true;
+    }
+  }
+
+  @override
+  void dispose() {
+    _fullNameController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _updateProfile() async {
+    final fullName = _fullNameController.text.trim();
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+
+    if (fullName.isEmpty || email.isEmpty || password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('All fields are required')),
+      );
+      return;
+    }
+
+    // Check password requirements
+    if (!hasMinLength || !hasUppercase || !hasDigits || !hasSpecialCharacters) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please meet all password requirements')),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      // TODO: Replace with backend update call.
+      // Backend should:
+      // 1. Validate email format and uniqueness
+      // 2. Hash and store password securely
+      // 3. Update user's fullName, email, and password
+      // 4. Return success/error response
+      // 5. Handle token refresh if needed
+
+      final auth = AuthScope.of(context);
+      await auth.updateProfile(
+        fullName: fullName,
+        email: email,
+        password: password,
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Profile updated successfully')),
+      );
+      setState(() => _isLoading = false);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final auth = AuthScope.of(context);
+    final currentUserName = auth.currentUser?.fullName ?? "User";
+
     return Scaffold(
       extendBody: true,
       bottomNavigationBar: CustomBottomNavBar(
@@ -83,8 +189,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                 Center(
                                   child: Column(
                                     children: [
-                                      Text("John Smith", style: GoogleFonts.poppins(fontSize: 22, fontWeight: FontWeight.bold, color: kTextDark)),
-                                      Text("ID: 25030024", style: GoogleFonts.poppins(fontSize: 13, color: kTextDark.withOpacity(0.7))),
+                                      Text(currentUserName, style: GoogleFonts.poppins(fontSize: 22, fontWeight: FontWeight.bold, color: kTextDark)),
+                                      Text("ID: --------", style: GoogleFonts.poppins(fontSize: 13, color: kTextDark.withOpacity(0.7))),
                                     ],
                                   ),
                                 ),
@@ -92,24 +198,35 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                 Text("Account Settings", style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.bold, color: kTextDark)),
                                 const SizedBox(height: 20),
                                 
-                                _buildInputField("Username", "John Smith"),
-                                _buildInputField("Phone", "+44 555 5555 55"),
-                                _buildInputField("Email Address", "example@example.com"),
+                                _buildInputField("Full Name", _fullNameController),
+                                _buildInputField("Email Address", _emailController),
+                                _buildInputField("Password", _passwordController, isPassword: true),
                                 
-                                _buildToggleTile("Push Notifications", pushNotifications, (val) => setState(() => pushNotifications = val)),
-                                _buildToggleTile("Turn Dark Theme", darkTheme, (val) => setState(() => darkTheme = val)),
+                                // --- PASSWORD VALIDATION RULES ---
+                                const SizedBox(height: 12),
+                                _buildValidationRow("Minimum 8 characters", hasMinLength),
+                                _buildValidationRow("At least 1 uppercase letter", hasUppercase),
+                                _buildValidationRow("At least 1 number", hasDigits),
+                                _buildValidationRow("At least 1 special symbol", hasSpecialCharacters),
                                 
                                 const SizedBox(height: 30),
                                 Center(
                                   child: ElevatedButton(
-                                    onPressed: () => HapticFeedback.lightImpact(),
+                                    onPressed: _isLoading ? null : _updateProfile,
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: Colors.white,
                                       minimumSize: const Size(200, 50),
                                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
                                       elevation: 0,
+                                      disabledBackgroundColor: Colors.grey[300],
                                     ),
-                                    child: Text("Update Profile", style: GoogleFonts.poppins(color: kTextDark, fontWeight: FontWeight.w600)),
+                                    child: _isLoading
+                                        ? const SizedBox(
+                                            width: 20,
+                                            height: 20,
+                                            child: CircularProgressIndicator(strokeWidth: 2),
+                                          )
+                                        : Text("Update Profile", style: GoogleFonts.poppins(color: kTextDark, fontWeight: FontWeight.w600)),
                                   ),
                                 ),
                                 const SizedBox(height: 120),
@@ -181,7 +298,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     );
   }
 
-  Widget _buildInputField(String label, String initialValue) {
+  Widget _buildInputField(String label, TextEditingController controller, {bool isPassword = false}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 20),
       child: Column(
@@ -190,7 +307,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           Text(label, style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w500, color: kTextDark)),
           const SizedBox(height: 8),
           TextFormField(
-            initialValue: initialValue,
+            controller: controller,
+            obscureText: isPassword,
             style: GoogleFonts.poppins(color: Colors.white.withOpacity(0.8), fontSize: 14),
             decoration: InputDecoration(
               filled: true,
@@ -204,20 +322,24 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     );
   }
 
-  Widget _buildToggleTile(String title, bool value, Function(bool) onChanged) {
+  Widget _buildValidationRow(String text, bool isValid) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5),
+      padding: const EdgeInsets.only(bottom: 4, left: 15),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(title, style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.w600, color: kTextDark)),
-          Switch(
-            value: value,
-            onChanged: (val) {
-              HapticFeedback.lightImpact();
-              onChanged(val);
-            },
-            activeColor: kDeepBlue,
+          Icon(
+            isValid ? Icons.check_circle : Icons.circle,
+            size: 14,
+            color: isValid ? const Color(0xFF00D09E) : Colors.grey.withOpacity(0.5),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            text,
+            style: GoogleFonts.poppins(
+              fontSize: 12,
+              color: isValid ? const Color(0xFF00D09E) : Colors.grey,
+              fontWeight: isValid ? FontWeight.w600 : FontWeight.w400,
+            ),
           ),
         ],
       ),

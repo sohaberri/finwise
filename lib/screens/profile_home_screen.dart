@@ -25,6 +25,8 @@ class _ProfileHomeScreenState extends State<ProfileHomeScreen> {
   @override
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
+    final auth = AuthScope.of(context);
+    final currentUserName = auth.currentUser?.fullName ?? "User";
 
     return Scaffold(
       extendBody: true,
@@ -79,8 +81,8 @@ class _ProfileHomeScreenState extends State<ProfileHomeScreen> {
                           child: Column(
                             children: [
                               SizedBox(height: screenHeight * 0.1),
-                              Text("John Smith", style: GoogleFonts.poppins(fontSize: 24, fontWeight: FontWeight.bold, color: kTextDark)),
-                              Text("ID: 25030024", style: GoogleFonts.poppins(fontSize: 14, color: kTextDark.withOpacity(0.7))),
+                              Text(currentUserName, style: GoogleFonts.poppins(fontSize: 24, fontWeight: FontWeight.bold, color: kTextDark)),
+                              Text("ID: --------", style: GoogleFonts.poppins(fontSize: 14, color: kTextDark.withOpacity(0.7))),
                               const SizedBox(height: 35), // Slightly more gap after ID
                               
                               Expanded(
